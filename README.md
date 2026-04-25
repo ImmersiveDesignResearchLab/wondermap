@@ -12,7 +12,7 @@ WonderMap is a suite of open research tools for visualizing mobile EEG data spat
 
 The tools operationalize the **Neuro-Architectural Analysis Framework (NAAF)** developed at the Immersive Design Research Lab (IDRL), California State University Long Beach. The NAAF triangulates three data layers — environmental sensing, mobile EEG, and design ethnography — to investigate the neurophysiological and behavioral conditions that produce wonder in designed environments.
 
-EEG hardware: **g.tec Unicorn Hybrid Black** (8-channel, 250Hz, dry electrode).
+EEG hardware: **g.tec Unicorn Hybrid Black** (8-channel, 250Hz, hybrid electrodes).
 
 ---
 
