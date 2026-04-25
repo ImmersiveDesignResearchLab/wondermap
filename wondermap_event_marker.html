@@ -1,0 +1,1128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>WonderMap — Event Marker</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=DM+Mono:wght@300;400&display=swap');
+
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+
+  :root {
+    --bg:#f4f2ee;
+    --surface:#fafaf8;
+    --border:rgba(0,0,0,0.08);
+    --text:rgba(0,0,0,0.78);
+    --muted:rgba(0,0,0,0.38);
+    --faint:rgba(0,0,0,0.13);
+    --zA:#c4553a;
+    --zB:#3a7fc4;
+    --zC:#5a9e52;
+    --theta:#e07a30;
+    --alpha:#7a5abf;
+    --radius:10px;
+    /* min touch target 48px per Apple HIG */
+    --touch:52px;
+  }
+
+  html, body {
+    width:100%; height:100%;
+    background:var(--bg);
+    color:var(--text);
+    font-family:'DM Mono', monospace;
+    font-size:12px;
+    overflow:hidden;
+    -webkit-tap-highlight-color:transparent;
+    -webkit-touch-callout:none;
+    user-select:none;
+    overscroll-behavior:none;
+  }
+
+  /* ── LAYOUT ── */
+  #app {
+    display:grid;
+    grid-template-rows:56px 1fr auto;
+    height:100dvh; /* dynamic viewport height — accounts for mobile browser chrome */
+    height:100vh;
+  }
+
+  /* ── HEADER ── */
+  #header {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:0 16px;
+    border-bottom:1px solid var(--border);
+    background:var(--surface);
+    flex-shrink:0;
+  }
+
+  #header h1 {
+    font-family:'Cormorant Garamond', serif;
+    font-weight:300;
+    font-size:17px;
+    letter-spacing:0.11em;
+  }
+
+  #header h1 em {
+    font-style:italic;
+    color:var(--muted);
+    font-size:13px;
+    margin-left:6px;
+  }
+
+  .clock-wrap {
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+
+  #elapsed {
+    font-size:18px;
+    font-variant-numeric:tabular-nums;
+    letter-spacing:0.05em;
+    color:var(--muted);
+    min-width:68px;
+    text-align:right;
+    transition:color 0.3s;
+  }
+
+  #elapsed.running { color:#22c55e; }
+
+  .pip {
+    width:7px; height:7px;
+    border-radius:50%;
+    background:var(--faint);
+    transition:all 0.3s;
+    flex-shrink:0;
+  }
+  .pip.live {
+    background:#22c55e;
+    box-shadow:0 0 8px #22c55e;
+    animation:pip-blink 1.4s ease-in-out infinite;
+  }
+  @keyframes pip-blink { 0%,100%{opacity:1} 50%{opacity:0.25} }
+
+  /* ── SCROLLABLE ZONE AREA ── */
+  #zones {
+    overflow-y:auto;
+    padding:12px;
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    -webkit-overflow-scrolling:touch;
+  }
+
+  /* ── ZONE CARD ── */
+  .zone-card {
+    background:var(--surface);
+    border:1.5px solid var(--border);
+    border-radius:var(--radius);
+    padding:14px 14px 12px;
+    transition:border-color 0.2s, box-shadow 0.2s;
+  }
+
+  .zone-card.inside {
+    border-color:var(--zc);
+    box-shadow:0 0 0 1px var(--zc), 0 2px 20px rgba(0,0,0,0.07);
+  }
+
+  .zone-header {
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom:12px;
+  }
+
+  .zone-dot {
+    width:10px; height:10px;
+    border-radius:50%;
+    background:var(--zc);
+    flex-shrink:0;
+  }
+
+  .zone-name {
+    flex:1;
+    font-size:13px;
+    letter-spacing:0.09em;
+  }
+
+  .zone-badge {
+    font-size:8px;
+    letter-spacing:0.16em;
+    text-transform:uppercase;
+    color:var(--muted);
+    padding:3px 8px;
+    border:1px solid var(--border);
+    border-radius:20px;
+    transition:all 0.2s;
+  }
+
+  .zone-badge.inside {
+    color:var(--zc);
+    border-color:var(--zc);
+  }
+
+  /* ── ENTER / EXIT ── */
+  .zone-actions {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:8px;
+    margin-bottom:10px;
+  }
+
+  .btn-enter, .btn-exit {
+    min-height:var(--touch);
+    border-radius:7px;
+    border:1.5px solid;
+    font-family:'DM Mono', monospace;
+    font-size:11px;
+    letter-spacing:0.12em;
+    text-transform:uppercase;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:6px;
+    transition:opacity 0.12s, transform 0.1s;
+    -webkit-tap-highlight-color:transparent;
+    touch-action:manipulation;
+  }
+
+  .btn-enter {
+    background:var(--zc);
+    border-color:var(--zc);
+    color:#fff;
+  }
+
+  .btn-exit {
+    background:transparent;
+    border-color:var(--zc);
+    color:var(--zc);
+  }
+
+  .btn-enter:active, .btn-exit:active { transform:scale(0.96); }
+
+  .btn-enter:disabled, .btn-exit:disabled {
+    opacity:0.22;
+    pointer-events:none;
+  }
+
+  /* ── QUALITATIVE TAGS ── */
+  .tags-label {
+    font-size:8px;
+    letter-spacing:0.16em;
+    text-transform:uppercase;
+    color:var(--faint);
+    margin-bottom:6px;
+  }
+
+  .zone-tags {
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px;
+  }
+
+  .tag {
+    min-height:36px;
+    padding:0 12px;
+    border-radius:20px;
+    border:1px solid var(--border);
+    font-family:'DM Mono', monospace;
+    font-size:9px;
+    letter-spacing:0.12em;
+    text-transform:uppercase;
+    color:var(--muted);
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    background:transparent;
+    touch-action:manipulation;
+    transition:all 0.12s;
+    -webkit-tap-highlight-color:transparent;
+  }
+
+  .tag:active { transform:scale(0.93); }
+  .tag.flash  { background:var(--zc); color:#fff; border-color:var(--zc); }
+
+  /* ── BOTTOM PANEL ── */
+  #bottom {
+    background:var(--surface);
+    border-top:1px solid var(--border);
+    flex-shrink:0;
+    padding-bottom:env(safe-area-inset-bottom); /* iPhone home bar */
+  }
+
+  /* Session row */
+  #session-row {
+    display:grid;
+    grid-template-columns:1fr auto auto;
+    gap:8px;
+    padding:10px 12px;
+    border-bottom:1px solid var(--border);
+    align-items:center;
+  }
+
+  #btn-notable {
+    min-height:var(--touch);
+    border-radius:7px;
+    border:1.5px solid var(--theta);
+    background:rgba(224,122,48,0.07);
+    color:var(--theta);
+    font-family:'DM Mono', monospace;
+    font-size:10px;
+    letter-spacing:0.12em;
+    text-transform:uppercase;
+    cursor:pointer;
+    touch-action:manipulation;
+    -webkit-tap-highlight-color:transparent;
+    transition:all 0.12s;
+  }
+
+  #btn-notable:active { background:rgba(224,122,48,0.18); transform:scale(0.97); }
+
+  #btn-start {
+    min-height:var(--touch);
+    min-width:72px;
+    border-radius:7px;
+    border:none;
+    background:#22c55e;
+    color:#fff;
+    font-family:'DM Mono', monospace;
+    font-size:10px;
+    letter-spacing:0.12em;
+    text-transform:uppercase;
+    cursor:pointer;
+    touch-action:manipulation;
+    -webkit-tap-highlight-color:transparent;
+    transition:all 0.15s;
+  }
+
+  #btn-start.stop { background:#ef4444; }
+  #btn-start:active { transform:scale(0.96); }
+
+  #btn-export {
+    min-height:var(--touch);
+    min-width:64px;
+    border-radius:7px;
+    border:1.5px solid var(--border);
+    background:transparent;
+    color:var(--muted);
+    font-family:'DM Mono', monospace;
+    font-size:10px;
+    letter-spacing:0.10em;
+    text-transform:uppercase;
+    cursor:pointer;
+    touch-action:manipulation;
+    transition:all 0.12s;
+  }
+  #btn-export:active { transform:scale(0.96); border-color:var(--text); color:var(--text); }
+
+  /* Note + voice row */
+  #note-row {
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:8px 12px;
+    border-bottom:1px solid var(--border);
+  }
+
+  #btn-voice {
+    width:44px; height:44px;
+    border-radius:50%;
+    border:1.5px solid var(--border);
+    background:transparent;
+    color:var(--muted);
+    font-size:18px;
+    cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    flex-shrink:0;
+    touch-action:manipulation;
+    -webkit-tap-highlight-color:transparent;
+    transition:all 0.15s;
+  }
+
+  #btn-voice.listening {
+    background:rgba(122,90,191,0.12);
+    border-color:var(--alpha);
+    color:var(--alpha);
+    animation:voice-ring 1s ease-in-out infinite;
+  }
+
+  @keyframes voice-ring {
+    0%,100% { box-shadow:0 0 0 0 rgba(122,90,191,0.5); }
+    50%      { box-shadow:0 0 0 8px rgba(122,90,191,0); }
+  }
+
+  #note-input {
+    flex:1;
+    min-height:36px;
+    background:rgba(0,0,0,0.03);
+    border:1px solid var(--border);
+    border-radius:6px;
+    padding:0 10px;
+    outline:none;
+    font-family:'DM Mono', monospace;
+    font-size:11px;
+    color:var(--text);
+    -webkit-appearance:none;
+  }
+
+  #note-input::placeholder { color:var(--faint); }
+  #note-input:focus { border-color:rgba(0,0,0,0.2); }
+
+  #btn-note-log {
+    min-height:36px;
+    padding:0 12px;
+    border-radius:6px;
+    border:1.5px solid var(--border);
+    background:transparent;
+    font-family:'DM Mono', monospace;
+    font-size:9px;
+    letter-spacing:0.10em;
+    text-transform:uppercase;
+    color:var(--muted);
+    cursor:pointer;
+    flex-shrink:0;
+    touch-action:manipulation;
+    -webkit-tap-highlight-color:transparent;
+    transition:all 0.12s;
+  }
+  #btn-note-log:active { border-color:var(--text); color:var(--text); }
+
+  /* Log */
+  #log-wrap {
+    overflow-y:auto;
+    padding:7px 12px;
+    display:flex;
+    flex-direction:column;
+    gap:3px;
+    max-height:72px;
+    -webkit-overflow-scrolling:touch;
+  }
+
+  .log-entry {
+    display:flex;
+    gap:8px;
+    align-items:baseline;
+    animation:fadeUp 0.18s ease;
+  }
+
+  @keyframes fadeUp { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:none} }
+
+  .log-t {
+    font-size:8px;
+    color:var(--faint);
+    font-variant-numeric:tabular-nums;
+    flex-shrink:0;
+    width:48px;
+  }
+
+  .log-ev {
+    font-size:9px;
+    color:var(--muted);
+    letter-spacing:0.04em;
+    line-height:1.4;
+  }
+
+  /* ── SETUP PANEL ── */
+  #setup-panel {
+    position:fixed;
+    inset:0;
+    background:var(--bg);
+    z-index:100;
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+    transition:opacity 0.2s;
+  }
+  #setup-panel.hidden { display:none; }
+
+  #setup-header {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:0 16px;
+    height:56px;
+    border-bottom:1px solid var(--border);
+    background:var(--surface);
+    flex-shrink:0;
+  }
+  #setup-header h2 {
+    font-family:'Cormorant Garamond', serif;
+    font-weight:300;
+    font-size:17px;
+    letter-spacing:0.11em;
+  }
+  #btn-setup-done {
+    min-height:40px; padding:0 18px;
+    border-radius:7px; border:none;
+    background:var(--text); color:#fff;
+    font-family:'DM Mono', monospace;
+    font-size:10px; letter-spacing:0.12em; text-transform:uppercase;
+    cursor:pointer; touch-action:manipulation;
+    -webkit-tap-highlight-color:transparent;
+  }
+  #btn-setup-done:active { opacity:0.7; }
+
+  #setup-body {
+    overflow-y:auto; padding:14px 14px 60px;
+    -webkit-overflow-scrolling:touch;
+    display:flex; flex-direction:column; gap:14px;
+  }
+
+  .setup-intro {
+    font-size:10px; color:var(--muted);
+    line-height:1.6; letter-spacing:0.04em;
+    padding:2px 0 4px;
+  }
+
+  .setup-card {
+    background:var(--surface);
+    border:1.5px solid var(--border);
+    border-radius:var(--radius);
+    padding:14px;
+  }
+  .setup-card-hdr {
+    display:flex; align-items:center; gap:10px; margin-bottom:12px;
+  }
+  .setup-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+  .setup-card-title { font-size:11px; letter-spacing:0.10em; color:var(--muted); text-transform:uppercase; }
+
+  .setup-field { margin-bottom:10px; }
+  .setup-field:last-child { margin-bottom:0; }
+  .field-label {
+    font-size:8px; letter-spacing:0.16em; text-transform:uppercase;
+    color:var(--faint); margin-bottom:5px; display:block;
+  }
+  .field-input {
+    width:100%; min-height:42px; padding:0 10px;
+    background:rgba(0,0,0,0.03); border:1px solid var(--border);
+    border-radius:6px; font-family:'DM Mono', monospace;
+    font-size:12px; color:var(--text); outline:none; -webkit-appearance:none;
+  }
+  .field-input:focus { border-color:rgba(0,0,0,0.22); }
+  .field-textarea {
+    width:100%; min-height:68px; padding:9px 10px;
+    background:rgba(0,0,0,0.03); border:1px solid var(--border);
+    border-radius:6px; font-family:'DM Mono', monospace;
+    font-size:12px; color:var(--text); outline:none;
+    resize:none; -webkit-appearance:none; line-height:1.5;
+  }
+  .field-textarea:focus { border-color:rgba(0,0,0,0.22); }
+
+  .senses-grid { display:flex; flex-wrap:wrap; gap:6px; }
+  .sense-btn {
+    min-height:36px; padding:0 13px;
+    border-radius:20px; border:1.5px solid var(--border);
+    background:transparent;
+    font-family:'DM Mono', monospace; font-size:9px;
+    letter-spacing:0.10em; text-transform:uppercase; color:var(--muted);
+    cursor:pointer; touch-action:manipulation;
+    -webkit-tap-highlight-color:transparent;
+    transition:all 0.14s; display:flex; align-items:center;
+  }
+  .sense-btn.on { background:var(--zc); border-color:var(--zc); color:#fff; }
+
+  /* Image capture */
+  #btn-camera {
+    width:44px; height:44px; border-radius:50%;
+    border:1.5px solid var(--border); background:transparent;
+    color:var(--muted); font-size:18px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    flex-shrink:0; touch-action:manipulation;
+    -webkit-tap-highlight-color:transparent; transition:all 0.15s;
+  }
+  #btn-camera:active { border-color:var(--text); color:var(--text); transform:scale(0.94); }
+  #camera-input { display:none; }
+
+  /* Image thumbnails in log */
+  .log-thumb {
+    width:44px; height:44px; object-fit:cover;
+    border-radius:4px; border:1px solid var(--border);
+    flex-shrink:0; cursor:pointer;
+  }
+
+  /* Image strip — appears above log when images captured */
+  #img-strip {
+    display:flex; gap:6px; padding:6px 12px;
+    overflow-x:auto; -webkit-overflow-scrolling:touch;
+    border-bottom:1px solid var(--border);
+  }
+  #img-strip:empty { display:none; padding:0; }
+
+  .strip-item {
+    position:relative; flex-shrink:0;
+  }
+  .strip-thumb {
+    width:52px; height:52px; object-fit:cover;
+    border-radius:5px; border:1px solid var(--border); display:block;
+  }
+  .strip-label {
+    position:absolute; bottom:2px; left:0; right:0;
+    text-align:center; font-size:7px; color:#fff;
+    background:rgba(0,0,0,0.5); border-radius:0 0 4px 4px;
+    padding:1px 2px; letter-spacing:0.04em;
+  }
+
+  /* Edit button in header */
+  #btn-edit-setup {
+    min-height:34px; padding:0 12px;
+    border-radius:6px; border:1.5px solid var(--border);
+    background:transparent; color:var(--muted);
+    font-family:'DM Mono', monospace; font-size:9px;
+    letter-spacing:0.10em; text-transform:uppercase;
+    cursor:pointer; touch-action:manipulation;
+    -webkit-tap-highlight-color:transparent; transition:all 0.12s;
+  }
+  #btn-edit-setup:active { border-color:var(--text); color:var(--text); }
+</style>
+</head>
+<body>
+
+<!-- SETUP PANEL — shown on load, reopenable via Edit button -->
+<div id="setup-panel">
+  <div id="setup-header">
+    <h2>Feature Setup</h2>
+    <button id="btn-setup-done" onclick="closeSetup()">Done</button>
+  </div>
+  <div id="setup-body">
+    <p class="setup-intro">Name each feature, describe what it is, and select the primary senses it addresses. This information is included in your CSV export.</p>
+    <div id="setup-cards"></div>
+  </div>
+</div>
+
+<div id="app">
+
+  <header id="header">
+    <h1>WonderMap <em>marker</em></h1>
+    <div class="clock-wrap">
+      <button id="btn-edit-setup" onclick="openSetup()">Edit</button>
+      <div class="pip" id="pip"></div>
+      <div id="elapsed">00:00.0</div>
+    </div>
+  </header>
+
+  <div id="zones"></div>
+
+  <div id="bottom">
+    <div id="session-row">
+      <button id="btn-notable" ontouchend="e=>{e.preventDefault();logNotable()}" onclick="logNotable()">★ Notable</button>
+      <button id="btn-start" onclick="toggleSession()">Start</button>
+      <button id="btn-export" onclick="exportCSV()">CSV</button>
+    </div>
+    <div id="note-row">
+      <button id="btn-voice" onclick="toggleVoice()" aria-label="Voice note">🎙</button>
+      <button id="btn-camera" onclick="document.getElementById('camera-input').click()" aria-label="Capture image">📷</button>
+      <input type="file" id="camera-input" accept="image/*" capture="environment"
+             onchange="captureImage(this)">
+      <input type="text" id="note-input"
+             placeholder="note — type or speak"
+             maxlength="200"
+             enterkeyhint="done"
+             onkeydown="if(event.key==='Enter'){logNote();this.blur();}">
+      <button id="btn-note-log" onclick="logNote()">Log</button>
+    </div>
+    <div id="img-strip"></div>
+    <div id="log-wrap"></div>
+  </div>
+
+</div>
+
+<script>
+// ── SENSES ───────────────────────────────────────────────────────
+const SENSES = [
+  { id:'seeing',        label:'Seeing'        },
+  { id:'smelling',      label:'Smelling'      },
+  { id:'tasting',       label:'Tasting'       },
+  { id:'hearing',       label:'Hearing'       },
+  { id:'haptics',       label:'Haptics'       },
+  { id:'proprioception',label:'Proprioception'},
+  { id:'mobility',      label:'Mobility'      },
+  { id:'proximity',     label:'Proximity'     },
+  { id:'agency',        label:'Agency'        },
+  { id:'connectedness', label:'Connectedness' },
+  { id:'surprise',      label:'Surprise'      },
+  { id:'possibility',   label:'Possibility'   }
+];
+
+function escHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ── SETUP PANEL ──────────────────────────────────────────────────
+function buildSetupCards(){
+  const container=document.getElementById('setup-cards');
+  container.innerHTML='';
+  ZONES.forEach(z=>{
+    const card=document.createElement('div');
+    card.className='setup-card';
+    card.style.setProperty('--zc',z.color);
+
+    const senseBtns=SENSES.map(s=>`
+      <button class="sense-btn ${z.senses.includes(s.id)?'on':''}"
+              id="sense-${z.id}-${s.id}"
+              style="--zc:${z.color}"
+              onclick="toggleSense('${z.id}','${s.id}')">${s.label}</button>
+    `).join('');
+
+    card.innerHTML=`
+      <div class="setup-card-hdr">
+        <div class="setup-dot" style="background:${z.color}"></div>
+        <div class="setup-card-title">Feature</div>
+      </div>
+      <div class="setup-field">
+        <label class="field-label">Name</label>
+        <input class="field-input" type="text" id="setup-name-${z.id}"
+               value="${escHtml(z.label)}"
+               placeholder="e.g. Sound Installation"
+               maxlength="60"
+               onchange="saveZoneSetup('${z.id}')">
+      </div>
+      <div class="setup-field">
+        <label class="field-label">Description</label>
+        <textarea class="field-textarea" id="setup-desc-${z.id}"
+                  placeholder="Brief description of this feature…"
+                  maxlength="300"
+                  onchange="saveZoneSetup('${z.id}')">${escHtml(z.description)}</textarea>
+      </div>
+      <div class="setup-field">
+        <label class="field-label">Senses Addressed</label>
+        <div class="senses-grid">${senseBtns}</div>
+      </div>`;
+    container.appendChild(card);
+  });
+}
+
+// ── IMAGE CAPTURE ─────────────────────────────────────────────────
+let capturedImages = []; // { filename, dataUrl, elapsed_s, wall_clock }
+
+function captureImage(input){
+  const file=input.files[0];
+  if(!file) return;
+  const s=elapsedSec();
+  const elapsed=s.toFixed(2);
+  const wc=wallClock();
+  const mins=String(Math.floor(s/60)).padStart(2,'0');
+  const secs=String(Math.floor(s%60)).padStart(2,'0');
+  const filename=`img_${mins}m${secs}s_${Date.now()}.jpg`;
+
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const dataUrl=e.target.result;
+    capturedImages.push({filename, dataUrl, elapsed_s:elapsed, wall_clock:wc,
+      unicorn_sample:Math.round(s*250)});
+
+    // Log the event
+    logEvent({type:'IMAGE', note:filename});
+
+    // Add to strip
+    const strip=document.getElementById('img-strip');
+    const item=document.createElement('div');
+    item.className='strip-item';
+    item.innerHTML=`
+      <img class="strip-thumb" src="${dataUrl}" onclick="previewImage('${filename}')">
+      <div class="strip-label">${mins}:${secs}</div>`;
+    strip.appendChild(item);
+    strip.scrollLeft=strip.scrollWidth;
+  };
+  reader.readAsDataURL(file);
+  input.value=''; // reset so same image can be captured again if needed
+}
+
+function previewImage(filename){
+  const img=capturedImages.find(i=>i.filename===filename);
+  if(!img) return;
+  // Simple lightbox
+  const overlay=document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:999;display:flex;align-items:center;justify-content:center;';
+  overlay.onclick=()=>document.body.removeChild(overlay);
+  const el=document.createElement('img');
+  el.src=img.dataUrl;
+  el.style.cssText='max-width:95vw;max-height:90vh;border-radius:6px;object-fit:contain;';
+  overlay.appendChild(el);
+  document.body.appendChild(overlay);
+}
+
+// Download all captured images as a zip isn't available without a library,
+// so we offer individual download links in the export summary
+function downloadImages(){
+  capturedImages.forEach(img=>{
+    const a=document.createElement('a');
+    a.href=img.dataUrl;
+    a.download=img.filename;
+    a.click();
+  });
+}
+
+function toggleSense(zid, sid){
+  const z=ZONES.find(z=>z.id===zid);
+  const idx=z.senses.indexOf(sid);
+  if(idx===-1) z.senses.push(sid);
+  else z.senses.splice(idx,1);
+  const btn=document.getElementById(`sense-${zid}-${sid}`);
+  btn.classList.toggle('on', z.senses.includes(sid));
+}
+
+function saveZoneSetup(zid){
+  const z=ZONES.find(z=>z.id===zid);
+  const nameEl=document.getElementById(`setup-name-${zid}`);
+  const descEl=document.getElementById(`setup-desc-${zid}`);
+  if(nameEl) z.label=nameEl.value.trim()||z.label;
+  if(descEl) z.description=descEl.value.trim();
+}
+
+function saveAllSetup(){
+  ZONES.forEach(z=>saveZoneSetup(z.id));
+}
+
+function openSetup(){
+  if(sessionActive) return; // don't allow editing mid-session
+  buildSetupCards();
+  document.getElementById('setup-panel').classList.remove('hidden');
+}
+
+function closeSetup(){
+  saveAllSetup();
+  document.getElementById('setup-panel').classList.add('hidden');
+  // Rebuild zone cards so updated names appear
+  buildZoneCards();
+  updateAllCards();
+}
+
+
+const ZONES = [
+  { id:'zA', label:'Feature A', color:'#c4553a', rgb:'196,85,58',
+    description:'', senses:[] },
+  { id:'zB', label:'Feature B', color:'#3a7fc4', rgb:'58,127,196',
+    description:'', senses:[] },
+  { id:'zC', label:'Feature C', color:'#5a9e52', rgb:'90,158,82',
+    description:'', senses:[] }
+];
+
+// Updated qualitative tags
+const TAGS = ['dwell','gesture','touch','play','engage','emote'];
+
+// ── STATE ────────────────────────────────────────────────────────
+let sessionActive = false;
+let sessionStart  = null;
+let timerInterval = null;
+let events        = [];
+const zoneState   = {};
+ZONES.forEach(z => zoneState[z.id] = false);
+
+// ── TIME HELPERS ─────────────────────────────────────────────────
+function elapsedSec(){ return sessionStart ? (Date.now()-sessionStart)/1000 : 0; }
+
+function fmtElapsed(s){
+  const m   = Math.floor(s/60);
+  const sec = (s%60).toFixed(1).padStart(4,'0');
+  return `${String(m).padStart(2,'0')}:${sec}`;
+}
+
+function wallClock(){
+  const d=new Date();
+  return [d.getHours(),d.getMinutes(),d.getSeconds()]
+    .map(n=>String(n).padStart(2,'0')).join(':')
+    + '.' + String(d.getMilliseconds()).padStart(3,'0');
+}
+
+// ── SESSION ──────────────────────────────────────────────────────
+function toggleSession(){
+  sessionActive ? stopSession() : startSession();
+}
+
+function startSession(){
+  sessionActive=true;
+  sessionStart=Date.now();
+  events=[];
+  ZONES.forEach(z=>zoneState[z.id]=false);
+  document.getElementById('log-wrap').innerHTML='';
+  document.getElementById('btn-start').textContent='Stop';
+  document.getElementById('btn-start').classList.add('stop');
+  document.getElementById('pip').classList.add('live');
+  document.getElementById('elapsed').classList.add('running');
+  updateAllCards();
+  logEvent({type:'SESSION_START'});
+  timerInterval=setInterval(()=>{
+    document.getElementById('elapsed').textContent=fmtElapsed(elapsedSec());
+  },100);
+}
+
+function stopSession(){
+  ZONES.forEach(z=>{ if(zoneState[z.id]) logZoneExit(z.id,true); });
+  logEvent({type:'SESSION_END'});
+  sessionActive=false;
+  clearInterval(timerInterval);
+  document.getElementById('btn-start').textContent='Start';
+  document.getElementById('btn-start').classList.remove('stop');
+  document.getElementById('pip').classList.remove('live');
+  document.getElementById('elapsed').classList.remove('running');
+  updateAllCards();
+}
+
+// ── EVENT CORE ───────────────────────────────────────────────────
+function logEvent(ev){
+  const s=elapsedSec();
+  const entry={
+    elapsed_s:        s.toFixed(2),
+    wall_clock:       wallClock(),
+    unicorn_sample:   Math.round(s*250),
+    type:             ev.type   ||'',
+    zone:             ev.zone   ||'',
+    tag:              ev.tag    ||'',
+    note:             ev.note   ||''
+  };
+  events.push(entry);
+  appendLog(entry);
+}
+
+function appendLog(e){
+  const wrap=document.getElementById('log-wrap');
+  const row=document.createElement('div');
+  row.className='log-entry';
+  let txt='';
+  const zl = e.zone ? ` <b>${e.zone}</b>` : '';
+  if(e.type==='ZONE_ENTER')    txt=`<span style="color:var(--text)">ENTER</span>${zl}`;
+  else if(e.type==='ZONE_EXIT')txt=`EXIT${zl}`;
+  else if(e.type==='TAG')      txt=`${zl} — ${e.tag}`;
+  else if(e.type==='NOTABLE')  txt=`<span style="color:var(--theta)">★ notable</span>`;
+  else if(e.type==='NOTE')     txt=`<span style="color:var(--alpha);font-style:italic">${e.note}</span>`;
+  else if(e.type==='VOICE_NOTE')txt=`<span style="color:var(--alpha)">🎙 ${e.note}</span>`;
+  else if(e.type==='IMAGE')       txt=`<span style="color:var(--zC)">📷 ${e.note}</span>`;
+  else if(e.type==='SESSION_END')  txt=`<span style="color:var(--text)">— session end —</span>`;
+  row.innerHTML=`<span class="log-t">${e.elapsed_s}s</span><span class="log-ev">${txt}</span>`;
+  wrap.appendChild(row);
+  wrap.scrollTop=wrap.scrollHeight;
+}
+
+// ── ZONE ACTIONS ─────────────────────────────────────────────────
+function logZoneEnter(zid){
+  if(!sessionActive||zoneState[zid]) return;
+  zoneState[zid]=true;
+  logEvent({type:'ZONE_ENTER',zone:zid});
+  updateCard(zid);
+  flash(`enter-${zid}`);
+}
+
+function logZoneExit(zid, auto=false){
+  if((!auto&&!sessionActive)||!zoneState[zid]) return;
+  zoneState[zid]=false;
+  logEvent({type:'ZONE_EXIT',zone:zid});
+  updateCard(zid);
+  if(!auto) flash(`exit-${zid}`);
+}
+
+function logTag(zid,tag){
+  if(!sessionActive) return;
+  logEvent({type:'TAG',zone:zid,tag});
+  flash(`tag-${zid}-${tag}`);
+}
+
+function logNotable(){
+  if(!sessionActive) return;
+  logEvent({type:'NOTABLE'});
+  flash('btn-notable');
+}
+
+function logNote(){
+  const inp=document.getElementById('note-input');
+  const val=inp.value.trim();
+  if(!val) return;
+  logEvent({type:sessionActive?'NOTE':'NOTE',note:val});
+  inp.value='';
+}
+
+function flash(id){
+  const el=document.getElementById(id);
+  if(!el) return;
+  el.classList.add('flash');
+  setTimeout(()=>el.classList.remove('flash'),280);
+}
+
+// ── ZONE CARD UI ─────────────────────────────────────────────────
+function buildZoneCards(){
+  const c=document.getElementById('zones');
+  c.innerHTML='';
+  ZONES.forEach(z=>{
+    const card=document.createElement('div');
+    card.className='zone-card';
+    card.id=`card-${z.id}`;
+    // Pass color as CSS custom property
+    card.style.setProperty('--zc',z.color);
+
+    const tagHtml=TAGS.map(t=>
+      `<button class="tag" id="tag-${z.id}-${t}"
+               onclick="logTag('${z.id}','${t}')">${t}</button>`
+    ).join('');
+
+    card.innerHTML=`
+      <div class="zone-header">
+        <div class="zone-dot"></div>
+        <div class="zone-name">${z.label}</div>
+        <div class="zone-badge" id="badge-${z.id}">outside</div>
+      </div>
+      <div class="zone-actions">
+        <button class="btn-enter" id="enter-${z.id}"
+                onclick="logZoneEnter('${z.id}')">▶ Enter</button>
+        <button class="btn-exit" id="exit-${z.id}"
+                onclick="logZoneExit('${z.id}')">◀ Exit</button>
+      </div>
+      <div class="tags-label">Observations</div>
+      <div class="zone-tags">${tagHtml}</div>`;
+    c.appendChild(card);
+  });
+}
+
+function updateCard(zid){
+  const inside=zoneState[zid];
+  const active=sessionActive;
+  const card=document.getElementById(`card-${zid}`);
+  const badge=document.getElementById(`badge-${zid}`);
+  const btnE=document.getElementById(`enter-${zid}`);
+  const btnX=document.getElementById(`exit-${zid}`);
+  card.classList.toggle('inside',inside);
+  badge.textContent=inside?'inside':'outside';
+  badge.classList.toggle('inside',inside);
+  btnE.disabled=!active||inside;
+  btnX.disabled=!active||!inside;
+}
+
+function updateAllCards(){ ZONES.forEach(z=>updateCard(z.id)); }
+
+// ── VOICE NOTES ──────────────────────────────────────────────────
+let recognition=null;
+let listening=false;
+
+function initRecognition(){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){
+    const btn=document.getElementById('btn-voice');
+    btn.style.opacity='0.25';
+    btn.title='Voice not supported in this browser';
+    btn.onclick=()=>alert('Voice notes require Chrome (desktop) or Safari (iOS 14.5+).');
+    return null;
+  }
+  const r=new SR();
+  r.continuous=false;
+  r.interimResults=true;
+  r.lang='en-US';
+
+  r.onstart=()=>{
+    listening=true;
+    document.getElementById('btn-voice').classList.add('listening');
+    document.getElementById('note-input').value='';
+    document.getElementById('note-input').placeholder='listening…';
+  };
+
+  r.onresult=e=>{
+    const transcript=Array.from(e.results).map(r=>r[0].transcript).join('');
+    document.getElementById('note-input').value=transcript;
+    if(e.results[e.results.length-1].isFinal){
+      const final=transcript.trim();
+      if(final){
+        if(sessionActive){
+          logEvent({type:'VOICE_NOTE',note:final});
+          document.getElementById('note-input').value='';
+        }
+        // if session not active, leave in field for manual log
+      }
+      endListening();
+    }
+  };
+
+  r.onerror=e=>{
+    endListening();
+    if(e.error==='not-allowed')
+      alert('Microphone access denied. Please allow mic in browser/system settings.');
+  };
+
+  r.onend=()=>endListening();
+  return r;
+}
+
+function endListening(){
+  listening=false;
+  document.getElementById('btn-voice').classList.remove('listening');
+  document.getElementById('note-input').placeholder='note — type or speak';
+}
+
+function toggleVoice(){
+  if(!recognition) recognition=initRecognition();
+  if(!recognition) return;
+  if(listening){
+    recognition.stop();
+  } else {
+    try{ recognition.start(); }
+    catch(err){
+      recognition.stop();
+      setTimeout(()=>{ try{recognition.start();}catch(e){} },300);
+    }
+  }
+}
+
+// ── CSV ──────────────────────────────────────────────────────────
+function exportCSV(){
+  if(!events.length){ alert('No events to export.'); return; }
+
+  // Zone metadata
+  const meta=ZONES.map(z=>[
+    `# Zone: ${z.id}`,
+    `# Name: ${z.label}`,
+    `# Description: ${z.description||'—'}`,
+    `# Senses: ${z.senses.length?z.senses.join(', '):'—'}`
+  ].join('\n')).join('\n');
+
+  // Image index
+  const imgMeta=capturedImages.length
+    ? '\n# Images:\n'+capturedImages.map(i=>
+        `# ${i.filename} — ${i.elapsed_s}s — ${i.wall_clock}`
+      ).join('\n')
+    : '';
+
+  const headers=['elapsed_s','wall_clock','unicorn_sample','type','zone','tag','note'];
+  const rows=events.map(e=>headers.map(h=>`"${String(e[h]||'').replace(/"/g,'""')}"`).join(','));
+  const csv=[meta+imgMeta,'',headers.join(','),...rows].join('\n');
+
+  const blob=new Blob([csv],{type:'text/csv'});
+  const url=URL.createObjectURL(blob);
+  const ts=sessionStart
+    ? new Date(sessionStart).toISOString().replace(/[:.]/g,'-').slice(0,19)
+    : 'session';
+  const a=document.createElement('a');
+  a.href=url; a.download=`wondermap_events_${ts}.csv`; a.click();
+  URL.revokeObjectURL(url);
+
+  // Offer image downloads if any captured
+  if(capturedImages.length){
+    setTimeout(()=>{
+      if(confirm(`Download ${capturedImages.length} captured image${capturedImages.length>1?'s':''}?`)){
+        downloadImages();
+      }
+    },400);
+  }
+}
+
+// ── KEYBOARD (desktop fallback) ──────────────────────────────────
+document.addEventListener('keydown',e=>{
+  if(e.target===document.getElementById('note-input')) return;
+  if(e.code==='Space'){e.preventDefault();logNotable();}
+  if(e.key==='1') logZoneEnter('zA');
+  if(e.key==='2') logZoneEnter('zB');
+  if(e.key==='3') logZoneEnter('zC');
+  if(e.key==='q'||e.key==='Q') logZoneExit('zA');
+  if(e.key==='w'||e.key==='W') logZoneExit('zB');
+  if(e.key==='e'||e.key==='E') logZoneExit('zC');
+  if(e.key==='v'||e.key==='V') toggleVoice();
+});
+
+// ── INIT ─────────────────────────────────────────────────────────
+buildZoneCards();
+updateAllCards();
+// Show setup on first load
+buildSetupCards();
+// Setup panel visible by default (no .hidden class on it)
+</script>
+</body>
+</html>

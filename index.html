@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WonderMap — IDRL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #f4f2ee;
+    --surface:  #fafaf8;
+    --black:    #111111;
+    --dark:     #222222;
+    --mid:      #555555;
+    --muted:    #888888;
+    --faint:    #cccccc;
+    --rule:     #e0ddd8;
+    --orange:   #e87020;
+    --blue:     #1b4fa8;
+    --theta:    #e07a30;
+    --alpha:    #7a5abf;
+    --beta:     #3aacb8;
+  }
+
+  html, body {
+    min-height: 100%;
+    background: var(--bg);
+    color: var(--dark);
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── HEADER ── */
+  header {
+    padding: 0 5vw;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--rule);
+    background: var(--surface);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .logo {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 22px;
+    font-weight: 400;
+    letter-spacing: 0.04em;
+    color: var(--black);
+    text-decoration: none;
+  }
+
+  .logo span { color: var(--orange); }
+
+  .header-right {
+    font-size: 9px;
+    letter-spacing: 0.16em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+
+  /* ── HERO ── */
+  .hero {
+    padding: 80px 5vw 64px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+
+  .hero-eyebrow {
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--orange);
+    margin-bottom: 24px;
+  }
+
+  .hero-headline {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: clamp(42px, 7vw, 80px);
+    font-weight: 300;
+    line-height: 1.05;
+    color: var(--black);
+    margin-bottom: 32px;
+    letter-spacing: -0.01em;
+  }
+
+  .hero-headline em {
+    font-style: italic;
+    color: var(--orange);
+  }
+
+  .hero-body {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 18px;
+    font-weight: 300;
+    line-height: 1.65;
+    color: var(--mid);
+    max-width: 640px;
+    margin-bottom: 48px;
+  }
+
+  /* Band dots */
+  .band-dots {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 48px;
+  }
+
+  .dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+  }
+
+  .band-legend {
+    display: flex;
+    gap: 28px;
+    flex-wrap: wrap;
+  }
+
+  .band-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .band-item .dot { width: 8px; height: 8px; }
+
+  /* ── RULE ── */
+  .rule {
+    width: 100%;
+    height: 1px;
+    background: var(--rule);
+    margin: 0 0 64px;
+  }
+
+  /* ── TOOL CARDS ── */
+  .tools {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 5vw 80px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+
+  @media (max-width: 720px) {
+    .tools { grid-template-columns: 1fr; }
+  }
+
+  .tool-card {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    padding: 40px 36px;
+    text-decoration: none;
+    color: inherit;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .tool-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: var(--card-accent);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.3s ease;
+  }
+
+  .tool-card:hover {
+    border-color: var(--card-accent);
+    box-shadow: 0 4px 24px rgba(0,0,0,0.06);
+  }
+
+  .tool-card:hover::before { transform: scaleX(1); }
+
+  .tool-number {
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    color: var(--faint);
+    margin-bottom: 24px;
+  }
+
+  .tool-name {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 32px;
+    font-weight: 400;
+    line-height: 1.1;
+    color: var(--black);
+    margin-bottom: 6px;
+    letter-spacing: -0.01em;
+  }
+
+  .tool-name span { color: var(--card-accent); }
+
+  .tool-tag {
+    font-size: 9px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--card-accent);
+    margin-bottom: 24px;
+  }
+
+  .rule-thin {
+    height: 1px;
+    background: var(--rule);
+    margin-bottom: 24px;
+  }
+
+  .tool-desc {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 15px;
+    font-weight: 300;
+    line-height: 1.65;
+    color: var(--mid);
+    margin-bottom: 32px;
+    flex: 1;
+  }
+
+  .tool-features {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 36px;
+  }
+
+  .feature {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.02em;
+  }
+
+  .feature-dot {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: var(--card-accent);
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .tool-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--card-accent);
+    font-family: 'DM Mono', monospace;
+    transition: gap 0.2s;
+  }
+
+  .tool-card:hover .tool-cta { gap: 14px; }
+
+  .cta-arrow { font-size: 14px; }
+
+  /* ── ABOUT ── */
+  .about {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 5vw 80px;
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 48px;
+    align-items: start;
+  }
+
+  @media (max-width: 720px) {
+    .about { grid-template-columns: 1fr; }
+  }
+
+  .about-label {
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--orange);
+    padding-top: 4px;
+  }
+
+  .about-text {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 16px;
+    font-weight: 300;
+    line-height: 1.75;
+    color: var(--mid);
+  }
+
+  .about-text p + p { margin-top: 16px; }
+
+  /* ── FRAMEWORK ── */
+  .framework {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 5vw 80px;
+  }
+
+  .framework-header {
+    display: flex;
+    align-items: baseline;
+    gap: 24px;
+    margin-bottom: 32px;
+  }
+
+  .framework-label {
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .framework-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 22px;
+    font-weight: 400;
+    color: var(--black);
+  }
+
+  .tiers {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  @media (max-width: 720px) {
+    .tiers { grid-template-columns: 1fr; }
+  }
+
+  .tier {
+    background: var(--surface);
+    padding: 28px 24px;
+  }
+
+  .tier-num {
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    color: var(--faint);
+    margin-bottom: 10px;
+  }
+
+  .tier-tech {
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 0.08em;
+    color: var(--black);
+    margin-bottom: 6px;
+  }
+
+  .tier-status {
+    display: inline-block;
+    font-size: 8px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border-radius: 20px;
+    margin-bottom: 12px;
+  }
+
+  .tier-status.active {
+    background: rgba(232,112,32,0.1);
+    color: var(--orange);
+    border: 1px solid rgba(232,112,32,0.3);
+  }
+
+  .tier-status.next {
+    background: rgba(27,79,168,0.08);
+    color: var(--blue);
+    border: 1px solid rgba(27,79,168,0.2);
+  }
+
+  .tier-status.future {
+    background: rgba(0,0,0,0.04);
+    color: var(--muted);
+    border: 1px solid var(--rule);
+  }
+
+  .tier-desc {
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.55;
+  }
+
+  /* ── FOOTER ── */
+  footer {
+    border-top: 1px solid var(--rule);
+    padding: 32px 5vw;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    background: var(--surface);
+  }
+
+  .footer-left {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 14px;
+    color: var(--muted);
+  }
+
+  .footer-left strong { color: var(--black); font-weight: 400; }
+
+  .footer-right {
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    color: var(--faint);
+    text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <a href="index.html" class="logo">Wonder<span>Map</span></a>
+  <div class="header-right">Immersive Design Research Lab</div>
+</header>
+
+<section class="hero">
+  <div class="hero-eyebrow">Neuroarchitectural Field Visualization</div>
+  <h1 class="hero-headline">
+    Designing for<br><em>wonder.</em>
+  </h1>
+  <p class="hero-body">
+    A suite of open research tools for visualizing mobile EEG data spatially, 
+    aligning it with ethnographic observation, and building a shared assessment 
+    infrastructure for the experiential quality of designed space.
+  </p>
+  <div class="band-legend">
+    <div class="band-item"><div class="dot" style="background:var(--theta)"></div>θ Theta — attention</div>
+    <div class="band-item"><div class="dot" style="background:var(--alpha)"></div>α Alpha — reception</div>
+    <div class="band-item"><div class="dot" style="background:var(--beta)"></div>β Beta — suppression</div>
+  </div>
+</section>
+
+<div style="max-width:1100px;margin:0 auto;padding:0 5vw"><div class="rule"></div></div>
+
+<section class="tools">
+
+  <a href="wondermap.html" class="tool-card" style="--card-accent: var(--orange)">
+    <div class="tool-number">01</div>
+    <div class="tool-name">Wonder<span>Map</span></div>
+    <div class="tool-tag">Visualization Interface</div>
+    <div class="rule-thin"></div>
+    <p class="tool-desc">
+      A browser-based neuroarchitectural field visualization tool. Renders live 
+      EEG data from the g.tec Unicorn Hybrid Black as an animated smoke field, 
+      spatially situated within an architectural floor plan. Supports live 
+      streaming and session replay.
+    </p>
+    <div class="tool-features">
+      <div class="feature"><div class="feature-dot"></div>Three frequency bands — theta, alpha, beta — each with a distinct space-wide color identity</div>
+      <div class="feature"><div class="feature-dot"></div>Puff geometry derived from Unicorn electrode cluster topology</div>
+      <div class="feature"><div class="feature-dot"></div>EMA smoothing — the field breathes rather than flickers</div>
+      <div class="feature"><div class="feature-dot"></div>Persistent path line, memory slider, wonder detection badge</div>
+      <div class="feature"><div class="feature-dot"></div>Uploadable base layer — photograph, collage, or Gaussian splat</div>
+    </div>
+    <div class="tool-cta">Open WonderMap <span class="cta-arrow">→</span></div>
+  </a>
+
+  <a href="wondermap_event_marker.html" class="tool-card" style="--card-accent: var(--blue)">
+    <div class="tool-number">02</div>
+    <div class="tool-name">Event<span style="color:var(--blue)"> Marker</span></div>
+    <div class="tool-tag">Ethnographic Companion Tool</div>
+    <div class="rule-thin"></div>
+    <p class="tool-desc">
+      A mobile-optimized companion interface for live session observation. 
+      Bridges mobile EEG and ethnographic observation by logging zone entries, 
+      behavioral tags, voice notes, and images with millisecond-precise 
+      timestamps aligned to the EEG record.
+    </p>
+    <div class="tool-features">
+      <div class="feature"><div class="feature-dot"></div>Feature setup — name, description, and 12-sense phenomenological vocabulary</div>
+      <div class="feature"><div class="feature-dot"></div>Zone entry / exit logging aligned to Unicorn sample timestamps</div>
+      <div class="feature"><div class="feature-dot"></div>Voice notes via Web Speech API — hands-free, eyes on participant</div>
+      <div class="feature"><div class="feature-dot"></div>Still image capture with timestamped CSV cross-reference</div>
+      <div class="feature"><div class="feature-dot"></div>iPhone, iPad, and Android — 52px minimum touch targets</div>
+    </div>
+    <div class="tool-cta">Open Event Marker <span class="cta-arrow">→</span></div>
+  </a>
+
+</section>
+
+<div style="max-width:1100px;margin:0 auto;padding:0 5vw"><div class="rule"></div></div>
+
+<section class="about">
+  <div class="about-label">About this research</div>
+  <div class="about-text">
+    <p>
+      WonderMap is developed by the Immersive Design Research Lab (IDRL) at 
+      California State University Long Beach as part of the Design Happenings 
+      research program — a series of public, multi-sensory installations in a 
+      downtown lab space that investigates the neurophysiological and behavioral 
+      conditions that produce wonder in designed environments.
+    </p>
+    <p>
+      The tools operationalize the Neuro-Architectural Analysis Framework (NAAF), 
+      which triangulates environmental sensing, mobile EEG, and design ethnography 
+      to study experiential qualities of architecture. WonderMap and the Event Marker 
+      are freely available for use in neuroarchitectural and experiential design research.
+    </p>
+    <p>
+      EEG hardware: g.tec Unicorn Hybrid Black (8-channel, 250Hz). 
+      Data schema is portable JSON, designed for compatibility with 
+      Three.js and Unity rendering pipelines.
+    </p>
+  </div>
+</section>
+
+<div style="max-width:1100px;margin:0 auto;padding:0 5vw"><div class="rule"></div></div>
+
+<section class="framework">
+  <div class="framework-header">
+    <div class="framework-label">Development trajectory</div>
+    <div class="framework-title">Three tiers — one data schema</div>
+  </div>
+  <div class="tiers">
+    <div class="tier">
+      <div class="tier-num">01</div>
+      <div class="tier-tech">p5.js / Browser</div>
+      <div><span class="tier-status active">Current</span></div>
+      <div class="tier-desc">Smoke field visualization over a floor plan image. Live EEG stream and session replay. Portable JSON data schema established here.</div>
+    </div>
+    <div class="tier">
+      <div class="tier-num">02</div>
+      <div class="tier-tech">Three.js / Browser</div>
+      <div><span class="tier-status next">Near term</span></div>
+      <div class="tier-desc">Live Gaussian splat rendering of the research space as base layer. Real-time LSL stream from Unicorn headset. Same data schema, upgraded renderer.</div>
+    </div>
+    <div class="tier">
+      <div class="tier-num">03</div>
+      <div class="tier-tech">Unity / Gaussian Splat</div>
+      <div><span class="tier-status future">Far goal</span></div>
+      <div class="tier-desc">Three-dimensional spatial rendering. Participant tracked in 3D space. Smoke field anchored to live movement in a Gaussian splat environment.</div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="footer-left">
+    <strong>Prof. Heather Renée Barker</strong> · Director, IDRL · 
+    California State University Long Beach
+  </div>
+  <div class="footer-right">Immersive Design Research Lab · Architectures of Experience</div>
+</footer>
+
+</body>
+</html>

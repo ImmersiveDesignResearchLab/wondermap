@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WonderMap — IDRL</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=DM+Mono:wght@300;400&display=swap');
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+  :root {
+    --bg:#f4f2ee; --surface:#fafaf8; --border:rgba(0,0,0,0.07);
+    --text:rgba(0,0,0,0.72); --muted:rgba(0,0,0,0.35); --faint:rgba(0,0,0,0.14);
+    --theta:#e07a30; --alpha:#7a5abf; --beta:#3aacb8;
+  }
+  html,body { width:100%; height:100%; background:var(--bg); color:var(--text); font-family:'DM Mono',monospace; font-size:11px; overflow:hidden; }
+  #app { display:grid; grid-template-columns:1fr 214px; grid-template-rows:48px 1fr 76px; height:100vh; }
+
+  #header { grid-column:1/-1; display:flex; align-items:center; justify-content:space-between; padding:0 22px; border-bottom:1px solid var(--border); background:var(--surface); }
+  #header h1 { font-family:'Cormorant Garamond',serif; font-weight:300; font-size:20px; letter-spacing:0.13em; }
+  #header h1 em { font-style:italic; color:var(--muted); font-size:15px; margin-left:10px; letter-spacing:0.05em; }
+  .live-pip { display:flex; align-items:center; gap:6px; font-size:8px; letter-spacing:0.16em; color:var(--muted); }
+  .pip { width:5px; height:5px; border-radius:50%; background:#22c55e; animation:blink 2s ease-in-out infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+
+  #canvas-wrap { position:relative; overflow:hidden; background:var(--bg); }
+  #upload-hint {
+    position:absolute; bottom:14px; left:50%; transform:translateX(-50%);
+    display:flex; align-items:center; gap:8px;
+    background:rgba(255,255,255,0.88); border:1px solid var(--border); border-radius:3px;
+    padding:7px 14px; cursor:pointer; font-size:9px; letter-spacing:0.12em; color:var(--muted);
+    transition:opacity 0.4s; backdrop-filter:blur(4px); white-space:nowrap; z-index:10;
+  }
+  #upload-hint:hover { color:var(--text); border-color:rgba(0,0,0,0.14); }
+  #file-input { display:none; }
+  #wonder-badge {
+    position:absolute; top:14px; left:50%; transform:translateX(-50%);
+    font-family:'Cormorant Garamond',serif; font-style:italic; font-size:13px;
+    letter-spacing:0.12em; color:rgba(224,122,48,0.0); transition:color 1.8s ease;
+    pointer-events:none; white-space:nowrap; z-index:10;
+  }
+  #wonder-badge.active { color:rgba(224,122,48,0.55); }
+
+  #sidebar { background:var(--surface); border-left:1px solid var(--border); padding:16px 13px; display:flex; flex-direction:column; gap:18px; overflow-y:auto; }
+  .s-label { font-size:8px; letter-spacing:0.2em; text-transform:uppercase; color:var(--faint); padding-bottom:7px; border-bottom:1px solid var(--border); }
+
+  .band-block { margin-bottom:8px; }
+  .band-hdr { display:flex; align-items:center; gap:8px; margin-bottom:3px; }
+  .band-pip { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+  .band-title { font-size:9px; letter-spacing:0.1em; flex:1; }
+  .band-topo { font-size:7.5px; color:var(--muted); margin-bottom:4px; padding-left:16px; line-height:1.5; font-style:italic; }
+  .band-meter { display:flex; align-items:center; gap:7px; padding-left:16px; }
+  .meter-track { flex:1; height:2px; background:rgba(0,0,0,0.07); border-radius:2px; overflow:hidden; }
+  .meter-fill { height:100%; border-radius:2px; transition:width 0.4s ease; }
+  .meter-val { font-size:9px; color:var(--muted); font-variant-numeric:tabular-nums; width:36px; text-align:right; }
+  .topo-diagram { padding-left:16px; margin-bottom:5px; }
+
+  .tog-row { display:flex; gap:5px; }
+  .tog { flex:1; padding:5px 2px; border:1px solid var(--border); border-radius:2px; background:transparent; font-family:'DM Mono',monospace; font-size:9px; letter-spacing:0.08em; color:var(--muted); cursor:pointer; text-align:center; transition:all 0.15s; }
+  .tog.on-theta { border-color:var(--theta); color:var(--theta); background:rgba(224,122,48,0.07); }
+  .tog.on-alpha { border-color:var(--alpha); color:var(--alpha); background:rgba(122,90,191,0.07); }
+  .tog.on-beta  { border-color:var(--beta);  color:var(--beta);  background:rgba(58,172,184,0.07); }
+
+  .zone-row { display:flex; align-items:center; gap:8px; padding:6px 6px; border-radius:3px; cursor:pointer; transition:background 0.15s; border:1px solid transparent; margin-bottom:3px; }
+  .zone-row:hover { background:rgba(0,0,0,0.03); }
+  .zone-row.sel { background:rgba(0,0,0,0.04); border-color:var(--border); }
+  .z-dot { width:7px; height:7px; border-radius:50%; background:var(--faint); flex-shrink:0; }
+  .z-name { flex:1; font-size:10px; }
+  .z-val { font-size:8px; color:var(--muted); font-variant-numeric:tabular-nums; }
+
+  .sl-block { margin-bottom:9px; }
+  .sl-top { display:flex; justify-content:space-between; margin-bottom:4px; }
+  .sl-top span:first-child { font-size:8px; letter-spacing:0.1em; color:var(--muted); }
+  .sl-top span:last-child { font-size:9px; font-variant-numeric:tabular-nums; }
+
+  /* Memory slider — highlighted as primary control */
+  .sl-block.primary .sl-top span:first-child { color:var(--text); }
+  .sl-block.primary input[type=range]::-webkit-slider-thumb { background:var(--theta); }
+
+  input[type=range] { -webkit-appearance:none; width:100%; height:1px; background:rgba(0,0,0,0.1); border-radius:1px; outline:none; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:9px; height:9px; border-radius:50%; background:var(--text); cursor:pointer; }
+
+  #timeline { grid-column:1/-1; background:var(--surface); border-top:1px solid var(--border); display:flex; align-items:center; gap:12px; padding:0 18px; }
+  .tl-btn { width:26px; height:26px; border:1px solid var(--border); border-radius:2px; background:transparent; font-size:10px; cursor:pointer; color:var(--text); display:flex; align-items:center; justify-content:center; transition:border-color 0.15s; flex-shrink:0; }
+  .tl-btn:hover { border-color:var(--muted); }
+  #tl-wrap { flex:1; height:30px; cursor:pointer; }
+  #tl-canvas { width:100%; height:100%; display:block; }
+  .tl-time { font-size:8px; letter-spacing:0.08em; color:var(--muted); font-variant-numeric:tabular-nums; flex-shrink:0; width:80px; text-align:right; }
+  .mode-pill { font-size:8px; letter-spacing:0.14em; padding:3px 9px; border-radius:20px; border:1px solid var(--border); cursor:pointer; transition:all 0.15s; flex-shrink:0; color:var(--muted); }
+  .mode-pill.live   { border-color:#22c55e; color:#22c55e; background:rgba(34,197,94,0.05); }
+  .mode-pill.replay { border-color:var(--theta); color:var(--theta); background:rgba(224,122,48,0.05); }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <header id="header">
+    <h1>WonderMap <em>neuroarchitectural field visualization</em></h1>
+    <div class="live-pip"><div class="pip" id="live-pip"></div><span id="mode-label">LIVE</span></div>
+  </header>
+
+  <div id="canvas-wrap">
+    <div id="wonder-badge">wonder detected</div>
+    <label id="upload-hint" for="file-input">＋ upload base layer image</label>
+    <input type="file" id="file-input" accept="image/*" onchange="loadBaseImage(event)">
+  </div>
+
+  <aside id="sidebar">
+    <div>
+      <div class="s-label">Band Signals</div>
+
+      <div class="band-block">
+        <div class="band-hdr">
+          <div class="band-pip" style="background:var(--theta)"></div>
+          <div class="band-title">θ THETA — attention</div>
+        </div>
+        <div class="band-topo">Fz · C3 · Cz · C4 — frontal–central</div>
+        <div class="topo-diagram">
+          <svg width="80" height="52" viewBox="0 0 80 52">
+            <ellipse cx="40" cy="26" rx="36" ry="24" fill="none" stroke="rgba(0,0,0,0.1)" stroke-width="0.75"/>
+            <line x1="40" y1="2" x2="40" y2="50" stroke="rgba(0,0,0,0.06)" stroke-width="0.5"/>
+            <line x1="4" y1="26" x2="76" y2="26" stroke="rgba(0,0,0,0.06)" stroke-width="0.5"/>
+            <circle cx="40" cy="12" r="4.5" fill="rgba(224,122,48,0.85)"/>
+            <circle cx="20" cy="26" r="4.5" fill="rgba(224,122,48,0.85)"/>
+            <circle cx="40" cy="26" r="4.5" fill="rgba(224,122,48,0.85)"/>
+            <circle cx="60" cy="26" r="4.5" fill="rgba(224,122,48,0.85)"/>
+            <circle cx="40" cy="38" r="3" fill="rgba(0,0,0,0.1)"/>
+            <circle cx="18" cy="40" r="3" fill="rgba(0,0,0,0.1)"/>
+            <circle cx="40" cy="44" r="3" fill="rgba(0,0,0,0.1)"/>
+            <circle cx="62" cy="40" r="3" fill="rgba(0,0,0,0.1)"/>
+            <ellipse cx="40" cy="20" rx="23" ry="11" fill="rgba(224,122,48,0.06)" stroke="rgba(224,122,48,0.22)" stroke-width="0.75" stroke-dasharray="2,2"/>
+          </svg>
+        </div>
+        <div class="band-meter">
+          <div class="meter-track"><div class="meter-fill" id="tf" style="width:0%;background:var(--theta)"></div></div>
+          <div class="meter-val" id="tv">+0.00</div>
+        </div>
+      </div>
+
+      <div class="band-block">
+        <div class="band-hdr">
+          <div class="band-pip" style="background:var(--alpha)"></div>
+          <div class="band-title">α ALPHA — reception</div>
+        </div>
+        <div class="band-topo">Pz · PO7 · Oz · PO8 — parieto-occipital</div>
+        <div class="topo-diagram">
+          <svg width="80" height="52" viewBox="0 0 80 52">
+            <ellipse cx="40" cy="26" rx="36" ry="24" fill="none" stroke="rgba(0,0,0,0.1)" stroke-width="0.75"/>
+            <line x1="40" y1="2" x2="40" y2="50" stroke="rgba(0,0,0,0.06)" stroke-width="0.5"/>
+            <line x1="4" y1="26" x2="76" y2="26" stroke="rgba(0,0,0,0.06)" stroke-width="0.5"/>
+            <circle cx="40" cy="12" r="3" fill="rgba(0,0,0,0.1)"/>
+            <circle cx="20" cy="26" r="3" fill="rgba(0,0,0,0.1)"/>
+            <circle cx="40" cy="26" r="3" fill="rgba(0,0,0,0.1)"/>
+            <circle cx="60" cy="26" r="3" fill="rgba(0,0,0,0.1)"/>
+            <circle cx="40" cy="38" r="4.5" fill="rgba(122,90,191,0.85)"/>
+            <circle cx="18" cy="40" r="4.5" fill="rgba(122,90,191,0.85)"/>
+            <circle cx="40" cy="44" r="4.5" fill="rgba(122,90,191,0.85)"/>
+            <circle cx="62" cy="40" r="4.5" fill="rgba(122,90,191,0.85)"/>
+            <ellipse cx="40" cy="41" rx="27" ry="9" fill="rgba(122,90,191,0.06)" stroke="rgba(122,90,191,0.22)" stroke-width="0.75" stroke-dasharray="2,2"/>
+          </svg>
+        </div>
+        <div class="band-meter">
+          <div class="meter-track"><div class="meter-fill" id="af" style="width:0%;background:var(--alpha)"></div></div>
+          <div class="meter-val" id="av">+0.00</div>
+        </div>
+      </div>
+
+      <div class="band-block">
+        <div class="band-hdr">
+          <div class="band-pip" style="background:var(--beta)"></div>
+          <div class="band-title">β BETA — suppression</div>
+        </div>
+        <div class="band-topo">C3 · Cz · C4 · Pz — central–parietal<br>meter fills as beta suppresses · cyan recedes</div>
+        <div class="topo-diagram">
+          <svg width="80" height="52" viewBox="0 0 80 52">
+            <ellipse cx="40" cy="26" rx="36" ry="24" fill="none" stroke="rgba(0,0,0,0.1)" stroke-width="0.75"/>
+            <line x1="40" y1="2" x2="40" y2="50" stroke="rgba(0,0,0,0.06)" stroke-width="0.5"/>
+            <line x1="4" y1="26" x2="76" y2="26" stroke="rgba(0,0,0,0.06)" stroke-width="0.5"/>
+            <circle cx="40" cy="12" r="3" fill="rgba(0,0,0,0.1)"/>
+            <circle cx="20" cy="26" r="4.5" fill="rgba(58,172,184,0.85)"/>
+            <circle cx="40" cy="26" r="4.5" fill="rgba(58,172,184,0.85)"/>
+            <circle cx="60" cy="26" r="4.5" fill="rgba(58,172,184,0.85)"/>
+            <circle cx="40" cy="38" r="4.5" fill="rgba(58,172,184,0.85)"/>
+            <circle cx="18" cy="40" r="3" fill="rgba(0,0,0,0.1)"/>
+            <circle cx="40" cy="44" r="3" fill="rgba(0,0,0,0.1)"/>
+            <circle cx="62" cy="40" r="3" fill="rgba(0,0,0,0.1)"/>
+            <ellipse cx="40" cy="30" rx="22" ry="10" fill="rgba(58,172,184,0.06)" stroke="rgba(58,172,184,0.22)" stroke-width="0.75" stroke-dasharray="2,2"/>
+          </svg>
+        </div>
+        <div class="band-meter">
+          <div class="meter-track"><div class="meter-fill" id="bf" style="width:0%;background:var(--beta)"></div></div>
+          <div class="meter-val" id="bv">+0.00</div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="s-label">Visible Bands</div>
+      <div class="tog-row">
+        <button class="tog on-theta" id="tog-theta" onclick="toggleBand('theta')">θ</button>
+        <button class="tog on-alpha" id="tog-alpha" onclick="toggleBand('alpha')">α</button>
+        <button class="tog on-beta"  id="tog-beta"  onclick="toggleBand('beta')">β</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="s-label">Feature Zones</div>
+      <div id="zone-list"></div>
+    </div>
+
+    <div>
+      <div class="s-label">Parameters</div>
+
+      <!-- Memory — primary control -->
+      <div class="sl-block primary">
+        <div class="sl-top"><span>SMOKE MEMORY</span><span id="sv-mem">2s</span></div>
+        <input type="range" min="1" max="40" value="4" id="sl-mem"
+          oninput="
+            const s=(+this.value*0.5).toFixed(1);
+            document.getElementById('sv-mem').textContent=s+'s';
+            P.memorySeconds=+this.value*0.5;">
+      </div>
+
+      <div class="sl-block">
+        <div class="sl-top"><span>SMOKE DENSITY</span><span id="sv-d">0.7</span></div>
+        <input type="range" min="1" max="10" value="7"
+          oninput="document.getElementById('sv-d').textContent=(this.value/10).toFixed(1);P.density=this.value/10">
+      </div>
+      <div class="sl-block">
+        <div class="sl-top"><span>FIELD RADIUS</span><span id="sv-r">1.0</span></div>
+        <input type="range" min="3" max="22" value="10"
+          oninput="document.getElementById('sv-r').textContent=(this.value/10).toFixed(1);P.radius=this.value/10">
+      </div>
+      <div class="sl-block">
+        <div class="sl-top"><span>DRIFT SPEED</span><span id="sv-s">0.5</span></div>
+        <input type="range" min="1" max="20" value="5"
+          oninput="document.getElementById('sv-s').textContent=(this.value/10).toFixed(1);P.driftSpeed=this.value/10">
+      </div>
+      <div class="sl-block">
+        <div class="sl-top"><span>TURBULENCE</span><span id="sv-t">0.4</span></div>
+        <input type="range" min="0" max="15" value="4"
+          oninput="document.getElementById('sv-t').textContent=(this.value/10).toFixed(1);P.turbulence=this.value/10">
+      </div>
+      <div class="sl-block">
+        <div class="sl-top"><span>BASE LAYER</span><span id="sv-bi">0.4</span></div>
+        <input type="range" min="0" max="10" value="4"
+          oninput="document.getElementById('sv-bi').textContent=(this.value/10).toFixed(1);P.baseOpacity=this.value/10">
+      </div>
+    </div>
+  </aside>
+
+  <div id="timeline">
+    <button class="tl-btn" id="play-btn" onclick="togglePlay()">⏸</button>
+    <button class="tl-btn" onclick="resetSession()">↺</button>
+    <div id="tl-wrap"><canvas id="tl-canvas"></canvas></div>
+    <span class="tl-time" id="tl-time">00:00 / 00:00</span>
+    <button class="mode-pill live" id="mode-btn" onclick="toggleMode()">LIVE</button>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════
+// UNICORN HYBRID BLACK — CHANNEL TOPOLOGY
+// ═══════════════════════════════════════════════════
+const CHANNELS = {
+  Fz:{x:0.00,y:-0.35}, C3:{x:-0.35,y:0.00}, Cz:{x:0.00,y:0.00}, C4:{x:0.35,y:0.00},
+  Pz:{x:0.00,y:0.30},  PO7:{x:-0.38,y:0.42}, Oz:{x:0.00,y:0.50}, PO8:{x:0.38,y:0.42}
+};
+
+function clusterProps(names){
+  const pts=names.map(n=>CHANNELS[n]);
+  const cx=pts.reduce((s,p)=>s+p.x,0)/pts.length;
+  const cy=pts.reduce((s,p)=>s+p.y,0)/pts.length;
+  const xs=pts.map(p=>p.x), ys=pts.map(p=>p.y);
+  const xSpread=Math.max(...xs)-Math.min(...xs);
+  const ySpread=Math.max(...ys)-Math.min(...ys);
+  return {cx,cy,xSpread,ySpread,aspect:(xSpread+0.15)/(ySpread+0.15)};
+}
+
+const BANDS = {
+  theta:{ r:224,g:122,b:48,  topo:clusterProps(['Fz','C3','Cz','C4']), driftBias:{x:0.0,y:-0.8}, aspectScale:1.1, noiseOffset:0   },
+  alpha:{ r:122,g:90, b:191, topo:clusterProps(['Pz','PO7','Oz','PO8']),driftBias:{x:0.0,y:0.7},  aspectScale:1.5, noiseOffset:100 },
+  beta: { r:58, g:172,b:184, topo:clusterProps(['C3','Cz','C4','Pz']), driftBias:{x:0.0,y:0.0},  aspectScale:0.85,noiseOffset:200 }
+};
+
+// ═══════════════════════════════════════════════════
+// SESSION DATA
+// ═══════════════════════════════════════════════════
+// Visual scaling: canvas ~720px wide for the room.
+// Features should read as substantial presences in the space —
+// roughly 100–120px diameter for round zones, corridor ~200px tall × 30px wide.
+// Normalized: rx≈0.08 for round zones (0.08×720=58px radius → 116px diam).
+// Corridor: rx≈0.022 (16px), ry≈0.16 (115px tall).
+// Zone spacing: centers 0.25–0.30 apart → edges ~0.16–0.20 apart (~11–14ft).
+
+const SESSION = {
+  meta:{ id:"idrl_001", space:"IDRL Downtown Lab",
+    channels:Object.keys(CHANNELS), sampleRate:250,
+    baseline:{theta:1.0,alpha:1.0,beta:1.0} },
+  zones:[
+    { id:"zA", label:"Feature A",
+      x:0.38, y:0.48,
+      rx:0.082, ry:0.078,
+      rot:0.38,
+      outerRx:0.130, outerRy:0.124,
+      baseR:0.080 },
+    { id:"zB", label:"Feature B",
+      x:0.40, y:0.76,
+      rx:0.085, ry:0.076,
+      rot:0.16,
+      outerRx:0.134, outerRy:0.120,
+      baseR:0.080 },
+    { id:"zC", label:"Feature C",
+      x:0.76, y:0.32,
+      rx:0.022, ry:0.160,
+      rot:0.14,
+      outerRx:0.048, outerRy:0.210,
+      baseR:0.055 }
+  ],
+  frames:[]
+};
+
+// Zone proximity — elliptical test respecting rx/ry/rot
+function zoneProximity(z, nx, ny){
+  const dx = nx - z.x, dy = ny - z.y;
+  // Rotate into zone's local frame
+  const cr = Math.cos(-z.rot), sr = Math.sin(-z.rot);
+  const lx = dx*cr - dy*sr;
+  const ly = dx*sr + dy*cr;
+  // Normalized elliptical distance (0=center, 1=edge, >1=outside)
+  const ellD = Math.sqrt((lx/z.rx)**2 + (ly/z.ry)**2);
+  // Smooth falloff: 1 at center → 0 at 2× edge
+  return Math.max(0, 1 - ellD/2.0);
+}
+
+(function(){
+  // Zone centers are ~0.25–0.30 apart. Target 15–20s crossing time.
+  // 0.27 / 17s / 10fps = 0.0016 per frame — leisurely but perceptibly moving.
+  const FPS = 10;
+  const MAX_SPEED = 0.0018; // normalized units per frame
+
+  const total = 600*FPS; // 10 minutes
+  let px=0.42, py=0.82, tx=0.42, ty=0.82, dwell=0;
+  let vx=0, vy=0;
+
+  // Round-robin zone exploration — shuffle all zones into a queue,
+  // work through the queue before reshuffling. Ensures all features
+  // are visited before any is revisited.
+  const zoneIds = SESSION.zones.map(z=>z.id);
+  let visitQueue = [];
+  function nextVisitQueue(){
+    // Fisher-Yates shuffle of zone indices
+    const arr=[...zoneIds];
+    for(let k=arr.length-1;k>0;k--){
+      const j=Math.floor(Math.random()*(k+1));
+      [arr[k],arr[j]]=[arr[j],arr[k]];
+    }
+    return arr;
+  }
+  visitQueue = nextVisitQueue();
+
+  for(let i=0;i<total;i++){
+    const dx=tx-px, dy=ty-py, d=Math.sqrt(dx*dx+dy*dy);
+    const inDwell = dwell>0;
+
+    if(!inDwell && d<0.04){
+      if(Math.random()<0.75){
+        // Pull next zone from queue — round-robin through all features
+        if(visitQueue.length===0) visitQueue=nextVisitQueue();
+        const zid=visitQueue.shift();
+        const z=SESSION.zones.find(z=>z.id===zid);
+        const cr=Math.cos(z.rot), sr=Math.sin(z.rot);
+        const lx=(Math.random()-0.5)*z.rx*1.1, ly=(Math.random()-0.5)*z.ry*1.1;
+        tx=z.x+lx*cr-ly*sr; ty=z.y+lx*sr+ly*cr;
+        tx=Math.max(0.09,Math.min(0.91,tx));
+        ty=Math.max(0.09,Math.min(0.91,ty));
+        dwell=FPS*(20+Math.random()*25);
+      } else {
+        // Occasional wander between features
+        tx=0.12+Math.random()*0.76; ty=0.12+Math.random()*0.76;
+        dwell=FPS*(5+Math.random()*8);
+      }
+    }
+
+    if(inDwell) dwell--;
+
+    if(inDwell){
+      // Direct position step — bypasses velocity so it can never freeze.
+      // Wanders at ~40% of max speed in a smoothly varying direction.
+      const angle = Math.sin(i*0.07)*Math.PI + Math.cos(i*0.13)*Math.PI;
+      const wanderSpeed = MAX_SPEED * 0.45;
+      px += Math.cos(angle)*wanderSpeed + (Math.random()-0.5)*MAX_SPEED*0.3;
+      py += Math.sin(angle)*wanderSpeed + (Math.random()-0.5)*MAX_SPEED*0.3;
+      vx=0; vy=0; // clear velocity so travel resumes cleanly after dwell
+    } else {
+      // Travelling — velocity-based steering toward target
+      const desiredVx = dx*0.14 + (Math.random()-0.5)*0.0010;
+      const desiredVy = dy*0.14 + (Math.random()-0.5)*0.0010;
+      vx = vx*0.80 + desiredVx*0.20;
+      vy = vy*0.80 + desiredVy*0.20;
+      const spd=Math.sqrt(vx*vx+vy*vy);
+      if(spd>MAX_SPEED){vx=(vx/spd)*MAX_SPEED;vy=(vy/spd)*MAX_SPEED;}
+      px+=vx; py+=vy;
+    }
+    px=Math.max(0.07,Math.min(0.93,px)); py=Math.max(0.07,Math.min(0.93,py));
+
+    let th=1.0,al=1.0,be=1.0;
+    const currentSpeed=Math.sqrt(vx*vx+vy*vy);
+    const stillness=Math.max(0,1-currentSpeed/MAX_SPEED);
+
+    SESSION.zones.forEach(z=>{
+      const prox=zoneProximity(z,px,py);
+      if(prox>0){
+        th+=prox*0.95*(0.6+Math.random()*0.8);
+        al+=prox*0.35*(Math.random()*0.9-0.1);
+        const betaSup=prox*(0.3+Math.random()*0.4)*(1.0+stillness*1.0);
+        be-=betaSup;
+      }
+    });
+    const n=()=>(Math.random()-0.5)*0.08;
+    SESSION.frames.push({t:i/FPS,x:px,y:py,
+      theta:Math.max(0.05,th+n()),
+      alpha:Math.max(0.05,al+n()),
+      beta: Math.max(0.05,be+n())});
+  }
+})();
+
+// ═══════════════════════════════════════════════════
+// STATE & PARAMS
+// ═══════════════════════════════════════════════════
+const S = {
+  mode:'live', playing:true, tick:0, frameIdx:0,
+  bands:{theta:true,alpha:true,beta:true}, activeZone:null,
+  // Smoothed values
+  smooth:{ theta:1.0,alpha:1.0,beta:1.0, px:0.5,py:0.5 }
+};
+
+const P = {
+  memorySeconds: 2.0,   // how long smoke lingers (seconds) — primary control
+  density:       0.7,
+  radius:        1.0,
+  driftSpeed:    0.5,
+  turbulence:    0.4,
+  baseOpacity:   0.4
+};
+
+let baseImage = null;
+
+function ema(prev,next,k){ return prev+(next-prev)*k; }
+
+function toggleBand(b){ S.bands[b]=!S.bands[b]; document.getElementById('tog-'+b).classList.toggle('on-'+b,S.bands[b]); }
+function togglePlay(){ S.playing=!S.playing; document.getElementById('play-btn').textContent=S.playing?'⏸':'▶'; }
+function resetSession(){ S.tick=0; S.frameIdx=0; S.smooth={theta:1.0,alpha:1.0,beta:1.0,px:0.5,py:0.5}; if(window._p5i&&pathG){pathG.clear();} lastPathPx=null; lastPathPy=null; }
+function toggleMode(){
+  S.mode=S.mode==='live'?'replay':'live';
+  const btn=document.getElementById('mode-btn');
+  btn.className='mode-pill '+S.mode; btn.textContent=S.mode.toUpperCase();
+  document.getElementById('mode-label').textContent=S.mode==='live'?'LIVE':'REPLAY';
+  document.getElementById('live-pip').style.background=S.mode==='live'?'#22c55e':'#e0855a';
+  if(S.mode==='replay'){S.frameIdx=0;S.playing=true;document.getElementById('play-btn').textContent='⏸';}
+}
+function loadBaseImage(evt){
+  const file=evt.target.files[0]; if(!file)return;
+  const url=URL.createObjectURL(file);
+  if(window._p5i) window._p5i.loadImage(url,img=>{baseImage=img;});
+  const h=document.getElementById('upload-hint'); h.style.opacity='0'; h.style.pointerEvents='none';
+}
+
+function buildZoneList(){
+  const el=document.getElementById('zone-list'); el.innerHTML='';
+  SESSION.zones.forEach(z=>{
+    const div=document.createElement('div');
+    div.className='zone-row'+(S.activeZone===z.id?' sel':'');
+    div.innerHTML=`<div class="z-dot"></div><div class="z-name">${z.label}</div><div class="z-val" id="zv-${z.id}">—</div>`;
+    div.onclick=()=>{S.activeZone=S.activeZone===z.id?null:z.id;buildZoneList();};
+    el.appendChild(div);
+  });
+}
+buildZoneList();
+
+function currentFrame(){
+  if(S.mode==='live') return SESSION.frames[Math.floor(S.tick)%SESSION.frames.length];
+  return SESSION.frames[Math.min(S.frameIdx,SESSION.frames.length-1)];
+}
+
+function drawTimeline(){
+  const c=document.getElementById('tl-canvas'),wrap=document.getElementById('tl-wrap');
+  c.width=wrap.clientWidth; c.height=wrap.clientHeight;
+  const ctx=c.getContext('2d'),W=c.width,H=c.height,N=SESSION.frames.length;
+  ctx.clearRect(0,0,W,H);
+  SESSION.zones.forEach(z=>{
+    SESSION.frames.forEach((f,i)=>{
+      if(Math.sqrt((f.x-z.x)**2+(f.y-z.y)**2)<z.baseR*1.2){
+        ctx.fillStyle='rgba(0,0,0,0.05)';
+        ctx.fillRect((i/N)*W,0,Math.max(1,W/N*3),H);
+      }
+    });
+  });
+  [['theta',BANDS.theta],['alpha',BANDS.alpha],['beta',BANDS.beta]].forEach(([key,col])=>{
+    if(!S.bands[key])return;
+    ctx.beginPath();ctx.strokeStyle=`rgba(${col.r},${col.g},${col.b},0.65)`;ctx.lineWidth=1;
+    SESSION.frames.forEach((f,i)=>{
+      const x=(i/N)*W,y=H-Math.min(f[key]/2.5,1)*(H-3)-1;
+      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+    });ctx.stroke();
+  });
+  const pi=S.mode==='live'?(Math.floor(S.tick)%N)/N:S.frameIdx/N;
+  ctx.strokeStyle='rgba(0,0,0,0.25)';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(pi*W,0);ctx.lineTo(pi*W,H);ctx.stroke();
+  c.onclick=e=>{
+    if(S.mode!=='replay')return;
+    const r=c.getBoundingClientRect();
+    S.frameIdx=Math.floor(((e.clientX-r.left)/W)*N);
+  };
+}
+
+// ═══════════════════════════════════════════════════
+// SMOKE PUFF
+// Key behavior: puff carries a spawn position.
+// Each frame it checks distance from CURRENT participant
+// position. If participant has moved away beyond threshold,
+// puff immediately enters fadeout — smoke follows the person.
+// ═══════════════════════════════════════════════════
+class SmokePuff {
+  constructor(spawnX, spawnY, bandKey, zone, p, W, H){
+    this.bandKey  = bandKey;
+    this.band     = BANDS[bandKey];
+    this.zoneId   = zone.id;
+    this.spawnX   = spawnX;   // world position where spawned
+    this.spawnY   = spawnY;
+    this.zone     = zone;
+
+    this.x = spawnX + (Math.random()-0.5) * 5;
+    this.y = spawnY + (Math.random()-0.5) * 5;
+    this.vx = (Math.random()-0.5)*0.4;
+    this.vy = (Math.random()-0.5)*0.4;
+
+    const minWH = Math.min(W,H);
+    // Puff size proportional to zone's effective radius (average of rx/ry)
+    const avgR = (zone.rx + zone.ry) * 0.5;
+    const base  = avgR * minWH * P.radius * (0.5 + Math.random()*0.9);
+    this.wR = base * this.band.aspectScale;
+    this.hR = base / Math.max(this.band.aspectScale, 0.7);
+
+    this.alpha    = 0;
+    this.maxAlpha = 0.10 + Math.random()*0.12;
+    this.phase    = 'in';
+    this.age      = 0;
+
+    // Lifetime in frames — derived from memorySeconds at 30fps
+    this.totalLife = (P.memorySeconds * 30) * (0.6 + Math.random()*0.8);
+    this.fadeInDur  = Math.min(25 + Math.random()*20, this.totalLife*0.25);
+    this.fadeOutDur = Math.min(40 + Math.random()*40, this.totalLife*0.4);
+    this.holdDur    = Math.max(1, this.totalLife - this.fadeInDur - this.fadeOutDur);
+
+    this.noiseOff = Math.random()*1000 + this.band.noiseOffset;
+    this.noiseT   = Math.random()*100;
+
+    this.forcedOut = false; // participant left — begin immediate fadeout
+  }
+
+  update(smoothPx, smoothPy, frame, p, W, H){
+    this.age++;
+
+    // Puff fades when participant moves away from spawn point
+    // Threshold is generous — smoke follows the person with a natural lag
+    if(!this.forcedOut){
+      const distFromParticipant = Math.sqrt(
+        (smoothPx - this.spawnX)**2 + (smoothPy - this.spawnY)**2
+      );
+      const threshold = Math.max(this.zone.rx, this.zone.ry) * Math.min(W,H) * P.radius * 3.5 + 60;
+      if(distFromParticipant > threshold){
+        this.forcedOut = true;
+        this.phase = 'out';
+      }
+    }
+
+    // ── Lifecycle ──
+    if(!this.forcedOut){
+      if(this.phase==='in'){
+        this.alpha = Math.min(this.maxAlpha, this.alpha + this.maxAlpha/this.fadeInDur);
+        if(this.age > this.fadeInDur) this.phase='hold';
+      } else if(this.phase==='hold'){
+        // Recalculate total life each frame (memory slider may have changed)
+        const targetLife = P.memorySeconds * 30;
+        if(this.age > this.fadeInDur + Math.max(1, targetLife*0.5)) this.phase='out';
+      } else {
+        this.alpha = Math.max(0, this.alpha - this.maxAlpha/this.fadeOutDur);
+      }
+    } else {
+      // Forced fadeout — faster than natural
+      this.alpha = Math.max(0, this.alpha - this.maxAlpha/18);
+    }
+
+    // Expand softly
+    this.wR *= 1.0012;
+    this.hR *= 1.0006;
+
+    // Flow field + topology drift
+    this.noiseT += 0.004 * P.driftSpeed;
+    const nx  = p.noise(this.x*0.003+this.noiseOff, this.y*0.003, this.noiseT);
+    const ny  = p.noise(this.x*0.003, this.y*0.003+this.noiseOff+50, this.noiseT);
+    const flowAngle = nx * Math.PI * 4;
+    const flowSpeed = 0.14 * P.driftSpeed;
+    let dvx = Math.cos(flowAngle)*flowSpeed + this.band.driftBias.x*0.05*P.driftSpeed;
+    let dvy = Math.sin(flowAngle)*flowSpeed + this.band.driftBias.y*0.05*P.driftSpeed;
+
+    // Turbulence (reduced when wonder state — low beta)
+    const betaVal = frame ? frame.beta : 1.0;
+    const turbAmp = P.turbulence * betaVal * 0.4;
+    dvx += (p.noise(this.x*0.01+this.noiseOff+500,this.noiseT*2)-0.5)*turbAmp*0.4;
+    dvy += (p.noise(this.y*0.01+this.noiseOff+600,this.noiseT*2)-0.5)*turbAmp*0.4;
+
+    this.vx = this.vx*0.93 + dvx*0.07;
+    this.vy = this.vy*0.93 + dvy*0.07;
+    this.x += this.vx;
+    this.y += this.vy;
+  }
+
+  draw(smokeG){
+    if(this.alpha<=0.003) return;
+    const col = this.band;
+    // 4-layer Gaussian falloff — pure soft gradient, no hard edge
+    for(let i=4;i>=1;i--){
+      const t = i/4;
+      const gaussA = Math.exp(-t*t*2.2)*this.alpha;
+      smokeG.noStroke();
+      smokeG.fill(col.r, col.g, col.b, gaussA*255);
+      smokeG.ellipse(this.x, this.y, this.wR*2*t, this.hR*2*t);
+    }
+  }
+
+  isDead(){ return this.phase==='out' && this.alpha<=0.003; }
+}
+
+// ═══════════════════════════════════════════════════
+// P5 SKETCH
+// ═══════════════════════════════════════════════════
+new p5(function(p){
+  let W, H, floorG, smokeG, pathG;
+  let puffs = [];
+  let lastPathPx = null, lastPathPy = null; // track last drawn path position
+  window._p5i = p;
+
+  function buildFloor(g,W,H){
+    g.clear(); g.background(244,242,238,255);
+    // Outer room boundary
+    g.noFill(); g.stroke(0,0,0,10); g.strokeWeight(0.75);
+    g.rect(W*0.05,H*0.07,W*0.90,H*0.86,5);
+    // Subtle grid
+    g.stroke(0,0,0,5); g.strokeWeight(0.4);
+    for(let gx=0.2;gx<1;gx+=0.2) g.line(gx*W,H*0.07,gx*W,H*0.93);
+    for(let gy=0.2;gy<1;gy+=0.2) g.line(W*0.05,gy*H,W*0.95,gy*H);
+    // Column dots
+    [[0.2,0.2],[0.5,0.2],[0.8,0.2],[0.2,0.5],[0.8,0.5],[0.2,0.8],[0.5,0.8],[0.8,0.8]].forEach(([cx,cy])=>{
+      g.fill(0,0,0,8); g.noStroke(); g.rect(cx*W-3,cy*H-3,6,6,1);
+    });
+    // Zone outlines — shape-specific rendering
+    SESSION.zones.forEach(z=>{
+      g.push();
+      g.translate(z.x*W, z.y*H);
+      g.rotate(z.rot);
+
+      if(z.id === 'zC'){
+        // Outer ring — expanded corridor
+        g.noFill();
+        g.stroke(0,0,0,18); g.strokeWeight(0.7);
+        g.ellipse(0, 0, z.outerRx*W*2, z.outerRy*H*2);
+        // Main corridor body
+        g.fill(0,0,0,6);
+        g.stroke(0,0,0,55); g.strokeWeight(1.4);
+        g.ellipse(0, 0, z.rx*W*2, z.ry*H*2);
+        // Centre line
+        g.stroke(0,0,0,22); g.strokeWeight(0.6);
+        g.line(0, -z.ry*H*0.8, 0, z.ry*H*0.8);
+        // Entry/exit tick marks
+        g.stroke(0,0,0,30); g.strokeWeight(0.8);
+        const hw = z.rx*W*0.9;
+        g.line(-hw, -z.ry*H*0.88, hw, -z.ry*H*0.88);
+        g.line(-hw,  z.ry*H*0.88, hw,  z.ry*H*0.88);
+      } else {
+        // Outer ring — expanded zone boundary
+        g.noFill();
+        g.stroke(0,0,0,18); g.strokeWeight(0.7);
+        g.ellipse(0, 0, z.outerRx*W*2, z.outerRy*H*2);
+        // Main zone body
+        g.fill(0,0,0,4);
+        g.stroke(0,0,0,50); g.strokeWeight(1.3);
+        g.ellipse(0, 0, z.rx*W*2, z.ry*H*2);
+        // Inner ring for depth
+        g.stroke(0,0,0,16); g.strokeWeight(0.5);
+        g.ellipse(0, 0, z.rx*W*1.5, z.ry*H*1.5);
+      }
+      g.pop();
+    });
+  }
+
+  p.setup = function(){
+    const cont = document.getElementById('canvas-wrap');
+    W=cont.clientWidth; H=cont.clientHeight;
+    const cnv=p.createCanvas(W,H); cnv.parent('canvas-wrap');
+    p.colorMode(p.RGB,255,255,255,255);
+
+    smokeG = p.createGraphics(W,H);
+    smokeG.colorMode(p.RGB,255,255,255,255);
+    smokeG.clear();
+
+    pathG = p.createGraphics(W,H);
+    pathG.clear();
+
+    floorG = p.createGraphics(W,H);
+    buildFloor(floorG,W,H);
+
+    // Init smoothed position to first frame
+    if(SESSION.frames.length>0){
+      S.smooth.px = SESSION.frames[0].x;
+      S.smooth.py = SESSION.frames[0].y;
+    }
+
+    drawTimeline();
+    p.frameRate(30);
+  };
+
+  p.draw = function(){
+    // ── Advance session ──
+    if(S.playing){
+      if(S.mode==='live'){
+        // Advance at real-time playback (10 data fps → 30 draw fps = 0.33 frames/draw)
+        S.tick+=0.33;
+      } else {
+        S.frameIdx=Math.min(S.frameIdx+1,SESSION.frames.length-1);
+        if(S.frameIdx>=SESSION.frames.length-1){
+          S.playing=false;
+          document.getElementById('play-btn').textContent='▶';
+        }
+      }
+    }
+
+    const frame = currentFrame();
+    if(!frame) return;
+
+    // ── Smooth all values ──
+    // Position: EMA smoothing — lower k = smoother. Movement is now slow
+    // enough that a tighter follow (0.12) reads cleanly without lag.
+    const posK  = 0.12;
+    const bandK = 0.06;
+    S.smooth.px    = ema(S.smooth.px,    frame.x,     posK);
+    S.smooth.py    = ema(S.smooth.py,    frame.y,     posK);
+    S.smooth.theta = ema(S.smooth.theta, frame.theta, bandK);
+    S.smooth.alpha = ema(S.smooth.alpha, frame.alpha, bandK);
+    S.smooth.beta  = ema(S.smooth.beta,  frame.beta,  bandK);
+
+    const spx = S.smooth.px * W;
+    const spy = S.smooth.py * H;
+    const sf  = { theta:S.smooth.theta, alpha:S.smooth.alpha, beta:S.smooth.beta };
+
+    // ── Spawn puffs ──
+    // Smoke emits everywhere — cognitive state is always visible.
+    // Zone proximity amplifies emission and amplitude.
+    // Between zones: baseline signal from smoothed band values.
+    if(S.playing){
+      const globalProx = Math.max(
+        0.18, // baseline — always some signal
+        ...SESSION.zones.map(z=>zoneProximity(z,S.smooth.px,S.smooth.py))
+      );
+
+      // Find the closest zone for puff attribution (or use a dummy)
+      let nearestZone = SESSION.zones[0];
+      let nearestProx = 0;
+      SESSION.zones.forEach(z=>{
+        const pr=zoneProximity(z,S.smooth.px,S.smooth.py);
+        if(pr>nearestProx){nearestProx=pr;nearestZone=z;}
+      });
+
+      ['theta','alpha','beta'].forEach(bk => {
+        if(!S.bands[bk]) return;
+        const val = sf[bk];
+        let amp = bk==='beta' ? val*globalProx : val*globalProx;
+        amp = Math.max(0.1, Math.min(amp, 3.0));
+        const spawnProb = Math.min(amp*P.density*0.14, 0.80);
+        if(Math.random() < spawnProb){
+          puffs.push(new SmokePuff(spx, spy, bk, nearestZone, p, W, H));
+        }
+      });
+    }
+
+    // ── Update puffs — pass smoothed participant position ──
+    puffs.forEach(pt => pt.update(spx, spy, sf, p, W, H));
+    puffs = puffs.filter(pt => !pt.isDead());
+
+    // ── Draw puffs to smoke buffer ──
+    // Fade rate = how fast old smoke dissipates
+    // Tightly coupled to memorySeconds: short memory = fast fade
+    const fadePer30fps = 255 / (P.memorySeconds * 30 * 0.6);
+    smokeG.background(244,242,238, Math.max(fadePer30fps, 3));
+    puffs.forEach(pt => pt.draw(smokeG));
+
+    // ── Composite ──
+    p.background(244,242,238);
+    if(baseImage){
+      p.push(); p.tint(255,P.baseOpacity*255);
+      p.image(baseImage,W*0.05,H*0.07,W*0.90,H*0.86);
+      p.pop();
+    }
+    p.image(floorG,0,0);
+
+    // ── Persistent path — draws incrementally to pathG, never erased ──
+    // Thin, low-opacity line accumulates over the full session.
+    // Zone-proximate segments are drawn slightly warmer/darker.
+    if(S.playing && lastPathPx !== null){
+      const inZone = SESSION.zones.some(z=>zoneProximity(z,S.smooth.px,S.smooth.py)>0.1);
+      pathG.stroke(inZone ? 80 : 0, inZone ? 40 : 0, inZone ? 0 : 0, inZone ? 55 : 32);
+      pathG.strokeWeight(0.7);
+      pathG.line(lastPathPx*W, lastPathPy*H, S.smooth.px*W, S.smooth.py*H);
+    }
+    lastPathPx = S.smooth.px;
+    lastPathPy = S.smooth.py;
+
+    // Composite order: floor → persistent path → smoke → participant dot
+    p.image(pathG,0,0);
+    p.push(); p.blendMode(p.MULTIPLY); p.image(smokeG,0,0); p.pop();
+
+    // ── Participant dot — smoothed position, no fading trail (path handles history) ──
+    p.noStroke();
+    p.fill(0,0,0,12); p.ellipse(spx,spy,34,34);
+    p.fill(30,30,30,200); p.ellipse(spx,spy,14,14);
+    p.fill(255,255,255,230); p.ellipse(spx,spy,6,6);
+
+    // ── Zone labels ──
+    SESSION.zones.forEach(z=>{
+      const zx=z.x*W, zy=z.y*H;
+      const prox=zoneProximity(z,S.smooth.px,S.smooth.py);
+      const near=prox>0.1, sel=S.activeZone===z.id;
+      p.noStroke(); p.fill(0,0,0,near||sel?165:55);
+      p.textFont('DM Mono,monospace'); p.textSize(9); p.textAlign(p.CENTER);
+      // Label above the top of the zone ellipse
+      const topEdge=zy - z.ry*H - 10;
+      p.text(z.label,zx,topEdge);
+      if(near||sel){
+        p.textSize(7.5);
+        p.fill(BANDS.theta.r,BANDS.theta.g,BANDS.theta.b,185);
+        p.text(`θ ${(sf.theta-1>=0?'+':'')}${(sf.theta-1).toFixed(2)}`,zx-22,topEdge+13);
+        p.fill(BANDS.alpha.r,BANDS.alpha.g,BANDS.alpha.b,185);
+        p.text(`α ${(sf.alpha-1>=0?'+':'')}${(sf.alpha-1).toFixed(2)}`,zx+22,topEdge+13);
+        p.fill(BANDS.beta.r,BANDS.beta.g,BANDS.beta.b,155);
+        p.text(`β ${(sf.beta-1>=0?'+':'')}${(sf.beta-1).toFixed(2)}`,zx,topEdge+24);
+      }
+      // Pulse ring — rotated to match zone shape
+      if(near||sel){
+        const pulse=0.5+0.5*Math.sin(p.frameCount*0.07);
+        p.push();
+        p.translate(zx,zy);
+        p.rotate(z.rot);
+        p.noFill(); p.stroke(0,0,0,16+pulse*22); p.strokeWeight(1.0);
+        p.ellipse(0,0,(z.rx*W*2)+(pulse*10),(z.ry*H*2)+(pulse*10));
+        p.pop();
+      }
+    });
+
+    // Wonder state
+    const ws=sf.theta*(2.0-sf.beta);
+    document.getElementById('wonder-badge').classList.toggle('active',ws>2.2);
+
+    // Sidebar meters
+    // Theta: fills as theta rises above baseline
+    // Alpha: fills as alpha deviates from baseline (either direction)
+    // Beta: fills as beta is SUPPRESSED below baseline — more fill = deeper suppression = wonder
+    const tD=sf.theta-1, aD=sf.alpha-1, bSup=1-sf.beta; // bSup positive when suppressed
+    document.getElementById('tf').style.width=Math.min(Math.max(tD/1.5,0),1)*100+'%';
+    document.getElementById('af').style.width=Math.min(Math.abs(aD)/0.8,1)*100+'%';
+    document.getElementById('bf').style.width=Math.min(Math.max(bSup/0.8,0),1)*100+'%';
+    document.getElementById('tv').textContent=(tD>=0?'+':'')+tD.toFixed(2);
+    document.getElementById('av').textContent=(aD>=0?'+':'')+aD.toFixed(2);
+    document.getElementById('bv').textContent=(-bSup>=0?'+':'')+(sf.beta-1).toFixed(2);
+    SESSION.zones.forEach(z=>{
+      const prox=zoneProximity(z,S.smooth.px,S.smooth.py);
+      const el=document.getElementById('zv-'+z.id);
+      if(el)el.textContent=prox>0.1?`θ+${(sf.theta-1).toFixed(1)}`:'—';
+    });
+
+    if(p.frameCount%8===0) drawTimeline();
+    const tot=SESSION.frames[SESSION.frames.length-1].t;
+    const fmt=s=>`${String(Math.floor(s/60)).padStart(2,'0')}:${String(Math.floor(s%60)).padStart(2,'0')}`;
+    document.getElementById('tl-time').textContent=`${fmt(frame.t)} / ${fmt(tot)}`;
+  };
+
+  p.windowResized=function(){
+    const cont=document.getElementById('canvas-wrap');
+    W=cont.clientWidth;H=cont.clientHeight;
+    p.resizeCanvas(W,H);
+    smokeG=p.createGraphics(W,H);
+    smokeG.colorMode(p.RGB,255,255,255,255);
+    smokeG.clear();
+    pathG=p.createGraphics(W,H);
+    pathG.clear();
+    lastPathPx=null; lastPathPy=null;
+    floorG=p.createGraphics(W,H);
+    buildFloor(floorG,W,H);
+    drawTimeline();
+  };
+});
+</script>
+</body>
+</html>
