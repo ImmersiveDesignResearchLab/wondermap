@@ -2,8 +2,7 @@
 
 **Neuroarchitectural field visualization tools for the IDRL Design Happenings research program.**
 
-[Live site](https://immersivedesignresearchlab.github.io/wondermap/) · [WonderMap](https://immersivedesignresearchlab.github.io/wondermap/wondermap.html) · [Event Marker](https://immersivedesignresearchlab.github.io/wondermap/wondermap_event_marker.html)
-
+[Live site](https://immersivedesignresearchlab.github.io/wondermap/) · [WonderMap](https://immersivedesignresearchlab.github.io/wondermap/wondermap.html) · [Event Marker](https://immersivedesignresearchlab.github.io/wondermap/wondermap_event_marker.html) · [Outdoor map (xi)](https://immersivedesignresearchlab.github.io/wondermap/wondermap_outdoor.html)
 ---
 
 ## Overview
