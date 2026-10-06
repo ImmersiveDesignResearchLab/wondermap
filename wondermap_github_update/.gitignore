@@ -1,0 +1,27 @@
+# Session data contains participants' locations and brain-derived signals.
+# It must never be committed to a public repository.
+xi_session_*.json
+xi_events_*.csv
+xi_frames_*.csv
+wondermap_events_*.csv
+img_*.jpg
+img_*.png
+*.bdf
+*.edf
+*.xdf
+*.mp4
+*.mov
+*.m4a
+*.wav
+
+# Secrets (the publishable key in xi-config.js is public by design; these are not)
+.env
+*.secret
+service_role*
+
+# Python / OS
+__pycache__/
+*.pyc
+.venv/
+.DS_Store
+Thumbs.db
