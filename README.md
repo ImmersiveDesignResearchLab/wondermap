@@ -3,6 +3,7 @@
 **Neuroarchitectural field visualization tools for the IDRL Design Happenings research program.**
 
 [Live site](https://immersivedesignresearchlab.github.io/wondermap/) · [WonderMap](https://immersivedesignresearchlab.github.io/wondermap/wondermap.html) · [Event Marker](https://immersivedesignresearchlab.github.io/wondermap/wondermap_event_marker.html) · [Outdoor map (xi)](https://immersivedesignresearchlab.github.io/wondermap/wondermap_outdoor.html)
+
 ---
 
 ## Overview
@@ -84,43 +85,28 @@ Try it with no hardware: open [`wondermap_outdoor.html`](wondermap_outdoor.html)
 ### How the pieces fit
 
 ```
- Participant phones                                  Surface 2
+ Participant phones                                  Second screen
  gps_tracker.html ──┐                         ┌──▶  audience view (?mode=viewer)
                     ▼                         │
               Supabase Realtime ◀─────────────┘
               (Broadcast only, nothing stored)
                     │
                     ▼
-        Surface 1: wondermap_outdoor.html ◀── ws://localhost:8765 ◀── bridge/bridge.py
+        Main computer: wondermap_outdoor.html ◀── ws://localhost:8765 ◀── bridge/bridge.py
                                                                           ▲
                                        Unicorn ─▶ Unicorn Recorder ─▶ LSL ┘
 ```
 
 Raw EEG never leaves the computer running the bridge. Only processed band summaries (about four per second) go to the audience screen.
 
-### Setup
+### Get started
 
-1. **Cloud relay.** Create a free [Supabase](https://supabase.com) project. Only Realtime Broadcast is used; no tables are needed.
-2. **Config.** Put the Project URL and the **publishable** key in [`xi-config.js`](xi-config.js) (template: [`xi-config.example.js`](xi-config.example.js)). The publishable key is designed to be public. Never commit the secret or `service_role` key, or the database password.
-3. **Hosting.** Serve the pages over HTTPS (GitHub Pages works). Phones will not share location on an insecure page.
-4. **EEG bridge** (only for headset wearers). On the computer that runs Unicorn Suite:
-   ```
-   pip install -r bridge/requirements.txt
-   python bridge/bridge.py --synthetic          # test without a headset
-   python bridge/bridge.py --prefiltered        # live, using the filtered Unicorn Recorder stream
-   ```
-   In Unicorn Recorder, connect the headset, choose the filters, and enable LSL output. Run `python bridge/bridge.py --help` for the thresholds. The bridge was developed and tested on Python 3.12; install the requirements and run `--synthetic` on your own machine before relying on it, especially on a newer Python.
-5. **Map.** Open `wondermap_outdoor.html` on the main computer. Use **Find** or **My location** to center on the site. The start view is only approximate.
+Full instructions are in **[SETUP.md](SETUP.md)**: the cloud relay, the config file, the EEG bridge, the map, and how to run a session. In short:
 
-### Running a session
-
-1. **Setup mode:** place up to three features (they match the Event Marker's Feature A, B and C). Click **Place** then the map, or drag the handle. Or stand at a feature with a phone and press **Center**, then walk to its edge and press **Radius**.
-2. Participants scan the **Share my GPS** QR code. Put the **Audience view** QR or link on the second screen.
-3. For each headset wearer, link their EEG stream to their phone in the participant list and run the **90 second resting baseline** while they stand still.
-4. **Start session.** At the start, make the agreed flash-and-clap and press **Sync mark** so every recording (screen capture, 360 video, EEG, Event Marker CSV) aligns to one moment.
-5. When finished, **Stop session** and export. The page warns you if you try to close it with unsaved data.
-
-Exports: a JSON file (the full session), an events CSV, and a frames CSV.
+1. Create a free Supabase project and put its URL and publishable key in `xi-config.js` (never commit the secret key).
+2. Host the pages over HTTPS (GitHub Pages works).
+3. For headset wearers, run `bridge/bridge.py` on the computer that runs Unicorn Suite.
+4. Open `wondermap_outdoor.html`, place the features, and have participants scan the QR code.
 
 ### What the smoke shows
 
@@ -130,10 +116,7 @@ The **wonder signature** badge appears when theta is at least 1.35x baseline and
 
 ### Movement artifacts
 
-Walking and head movement contaminate EEG. The work is shared:
-
-- **g.tec Unicorn Recorder** applies band-pass and notch filtering, and OSCAR artifact removal is part of Unicorn Suite. To confirm for each setup: that the Recorder's LSL stream is the filtered one, that it includes the motion channels, and whether OSCAR applies to the live stream or only to recordings.
-- **`bridge.py`** adds two things a filter cannot: it rejects windows with large spikes, and it uses the headset's accelerometer and gyroscope to mark each window **still** or **moving**. Only still windows are scored. Thresholds are starting values and should be tuned on site.
+Walking and head movement contaminate EEG, so the work is shared. **g.tec's Unicorn Recorder** provides band-pass and notch filtering, and OSCAR artifact removal is part of Unicorn Suite. **`bridge.py`** adds two things a filter cannot: it rejects windows with large spikes, and it uses the headset's accelerometer and gyroscope to mark each window **still** or **moving**. Only still windows are scored. The thresholds are starting values, tuned on site.
 
 ### Why theta, alpha and beta
 
