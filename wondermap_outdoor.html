@@ -152,6 +152,7 @@
     <div class="logo">Wonder<b>Map</b><i>xi · outdoor</i></div>
     <div class="seg setup-toggle priv" id="modeSeg"><button data-m="setup" class="on">Setup</button><button data-m="live">Live</button></div>
     <div class="seg" id="baseSeg"><button data-b="sat" class="on">Satellite</button><button data-b="street">Street</button></div>
+    <button class="btn" id="fitBtn" title="Zoom the map to show every participant and feature">Show everyone</button>
     <div class="find priv">
       <input type="text" id="findQ" value="kokoka Kyoto International Community House" aria-label="Find a place">
       <button class="btn" id="findGo">Find</button>
@@ -170,7 +171,7 @@
     <div id="mapwrap">
       <div id="map"></div>
       <div id="toast"></div>
-      <div id="hud"><div class="mu small" style="margin-bottom:4px">Participants</div><div id="hudList"></div></div>
+      <div id="hud"><div class="mu small" style="margin-bottom:2px">Session <b id="hudCode"></b></div><div class="mu small" style="margin-bottom:4px">Participants</div><div id="hudList"></div><div class="mu small" id="hudRx" style="margin-top:7px"></div><div class="small" id="hudHint" style="margin-top:4px;color:var(--bad);max-width:240px"></div></div>
       <div class="legend"><span><i style="background:var(--th)"></i>Theta · attention</span><span><i style="background:var(--al)"></i>Alpha · reception</span><span><i style="background:var(--be)"></i>Beta · cognitive load</span></div>
       <div id="demo" class="priv">
         <h2>No data yet</h2>
@@ -222,6 +223,7 @@
         <div class="row"><label>Cloud URL</label><input type="text" id="sbUrl" placeholder="https://xxxx.supabase.co"></div>
         <div class="row"><label>Public key</label><input type="password" id="sbKey" placeholder="publishable key"></div>
         <div class="row"><label></label><button class="btn sm" id="sbBtn">Connect</button><span class="mu small" id="sbState">not connected</span></div>
+        <div class="hint" id="sbRx"></div>
       </section>
 
       <section class="panel priv">
@@ -378,7 +380,8 @@ function renderZones(){
   }
 }
 function saveZones(){ LS.set('zones', S.zones.map(z=>({id:z.id,label:z.label,lat:z.lat,lng:z.lng,r:z.r}))); pubZones(); }
-function applyZones(arr){ if(!Array.isArray(arr)) return; for(const a of arr){ const z=S.zones.find(x=>x.id===a.id); if(z){ z.label=a.label||z.label; z.lat=a.lat; z.lng=a.lng; z.r=a.r||a.radius_m||z.r; } } renderZones(); renderZoneRows(); }
+function applyZones(arr){ if(!Array.isArray(arr)) return; for(const a of arr){ const z=S.zones.find(x=>x.id===a.id); if(z){ z.label=a.label||z.label; z.lat=a.lat; z.lng=a.lng; z.r=a.r||a.radius_m||z.r; } } renderZones(); renderZoneRows();
+  if(VIEWER && !userMoved && !zonesFit && S.zones.some(z=>z.lat!=null)){ zonesFit=true; fitAll(); } }
 function loadZones(){ applyZones(LS.get('zones',[])); }
 function setZoneCenter(z, lat, lng){ z.lat=lat; z.lng=lng; saveZones(); renderZones(); renderZoneRows(); }
 function zonePayload(){ return S.zones.map(z=>({id:z.id,label:z.label,color:z.color,lat:z.lat,lng:z.lng,r:z.r})); }
@@ -454,7 +457,7 @@ function handleGps(m){
   const lat=+m.lat, lng=+m.lng; p.acc=+(m.accuracy ?? m.acc ?? 10); p.gpsTs=Date.now();
   const moved = p.lat==null ? 99 : haversine(p.lat,p.lng,lat,lng);
   p.lat=lat; p.lng=lng;
-  if(p.dlat==null){ p.dlat=lat; p.dlng=lng; makeMarker(p); }
+  if(p.dlat==null){ p.dlat=lat; p.dlng=lng; makeMarker(p); if(VIEWER && !userMoved && !fitDone){ fitDone=true; fitAll(); } }
   if(moved>0.5 && p.acc<=MAX_ACC){ p.trail.push([lat,lng]); if(p.trail.length>6000) p.trail.shift(); p.line.setLatLngs(p.trail); }
   checkZones(p);
   if(S.running) S.frames.push({t:+tNow().toFixed(2), id:p.id, k:'gps', lat, lng, acc:p.acc}), S.exported=false;
@@ -605,9 +608,22 @@ function updateMarker(p, now, dt){
   const lab=$('.lab',p.el), txt=p.name+(p.wonder?'  wonder':p.rel&&p.still===false?'  moving':'');
   if(lab.textContent!==txt) lab.textContent=txt;
 }
+function rxText(){ return `received: ${RX.gps} positions, ${RX.eeg} EEG, ${RX.zones} zone updates`; }
 function updateHud(){
   const now=Date.now();
+  $('#hudRx').textContent = S.sb.state==='connected' ? rxText() : 'not connected to the cloud';
+  const quiet = VIEWER && S.sb.state==='connected' && now-(S.sb.connectedAt||now)>8000 && RX.gps+RX.zones===0;
+  $('#hudHint').textContent = quiet ? 'Connected, but the main screen has not answered. Check that the session code above matches the code on the laptop.' : '';
+  $('#sbRx').textContent = S.sb.state==='connected' ? rxText() : '';
   $('#hudList').innerHTML=[...S.parts.values()].map(p=>`<div class="hr"><span class="pdot" style="--c:${p.color}"></span><span>${esc(p.name)}</span>${p.wonder?'<span class="w">wonder</span>':(p.scored?'<span class="mu small">scored</span>':'')}${now-p.gpsTs>15000?'<span class="fa small">offline</span>':''}</div>`).join('')||'<span class="mu small">waiting for participants…</span>';
+}
+let userMoved=false, fitDone=false, zonesFit=false;
+['pointerdown','wheel','touchstart'].forEach(ev=>map.getContainer().addEventListener(ev,()=>{ userMoved=true; },{passive:true}));
+function fitAll(){
+  const pts=[]; for(const p of S.parts.values()) if(p.lat!=null) pts.push([p.lat,p.lng]);
+  for(const z of S.zones) if(z.lat!=null) pts.push([z.lat,z.lng]);
+  if(!pts.length) return toast('Nothing to show yet');
+  if(pts.length===1) map.setView(pts[0],19); else map.fitBounds(L.latLngBounds(pts).pad(0.35),{maxZoom:19});
 }
 function renderStreams(){
   const a=[...S.streams.keys()];
@@ -636,6 +652,8 @@ function bridgeFail(){
 function bridgeStop(){ S.bridge.on=false; clearTimeout(S.bridge.timer); if(S.bridge.ws){ const w=S.bridge.ws; S.bridge.ws=null; w.onclose=null; try{w.close();}catch(e){} } setLight('#ltBridge',''); $('#brState').textContent='Bridge off.'; $('#brBtn').textContent='Connect'; }
 
 /* ═══════════════ data sources: Supabase Realtime (broadcast only) ═══════════════ */
+const RX={gps:0,eeg:0,zones:0,evt:0,hello:0};
+const rx=(k,fn)=>(msg)=>{ RX[k]++; fn(msg); };
 function loadScript(src){ return new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=src; s.onload=res; s.onerror=rej; document.head.appendChild(s); }); }
 function sbSet(state,txt){ S.sb.state=state; setLight('#ltCloud', state==='connected'?'on':state==='connecting'?'wait':state==='error'?'err':''); $('#sbState').textContent=txt; $('#sbBtn').textContent = (state==='connected'||state==='connecting')?'Disconnect':'Connect'; }
 async function sbConnect(){
@@ -646,13 +664,13 @@ async function sbConnect(){
   try{
     S.sb.client=window.supabase.createClient(url,key,{realtime:{params:{eventsPerSecond:30}}});
     const ch=S.sb.client.channel('xi-'+code,{config:{broadcast:{self:false}}});
-    ch.on('broadcast',{event:'gps'},({payload})=>handleGps(payload))
-      .on('broadcast',{event:'eeg'},({payload})=>{ if(VIEWER) handleRemoteEeg(payload); })
-      .on('broadcast',{event:'zones'},({payload})=>{ if(VIEWER && payload) applyZones(payload.zones); })
-      .on('broadcast',{event:'evt'},({payload})=>{ if(payload) logEvent(Object.assign({},payload,{type:payload.type||'EVT'})); })
-      .on('broadcast',{event:'hello'},()=>{ if(!VIEWER) pubZones(); })
+    ch.on('broadcast',{event:'gps'},rx('gps',({payload})=>handleGps(payload)))
+      .on('broadcast',{event:'eeg'},rx('eeg',({payload})=>{ if(VIEWER) handleRemoteEeg(payload); }))
+      .on('broadcast',{event:'zones'},rx('zones',({payload})=>{ if(VIEWER && payload) applyZones(payload.zones); }))
+      .on('broadcast',{event:'evt'},rx('evt',({payload})=>{ if(payload) logEvent(Object.assign({},payload,{type:payload.type||'EVT'})); }))
+      .on('broadcast',{event:'hello'},rx('hello',()=>{ if(!VIEWER) pubZones(); }))
       .subscribe(status=>{
-        if(status==='SUBSCRIBED'){ sbSet('connected','connected · session '+code); if(VIEWER) pub('hello',{}); else pubZones(); }
+        if(status==='SUBSCRIBED'){ S.sb.connectedAt=Date.now(); sbSet('connected','connected · session '+code); if(VIEWER) pub('hello',{}); else pubZones(); }
         else if(status==='CHANNEL_ERROR'||status==='TIMED_OUT') sbSet('error','connection problem, retrying');
         else if(status==='CLOSED') sbSet('off','closed');
       });
@@ -767,6 +785,8 @@ $('#findGo').onclick=async()=>{ const q=$('#findQ').value.trim(); if(!q) return;
 $('#findQ').onkeydown=e=>{ if(e.key==='Enter') $('#findGo').click(); };
 $('#myLoc').onclick=()=>{ if(!navigator.geolocation) return toast('This device has no location service'); navigator.geolocation.getCurrentPosition(p=>{ map.setView([p.coords.latitude,p.coords.longitude],19); toast('Centered on this device (±'+Math.round(p.coords.accuracy)+' m)'); },()=>toast('Location blocked or unavailable'),{enableHighAccuracy:true,timeout:10000}); };
 
+$('#fitBtn').onclick=fitAll;
+$('#hudCode').textContent=S.sb.code;
 $('#simBtn').onclick=()=>S.sim.on?simStop():simStart();
 $('#demoGo').onclick=simStart;
 $('#brUrl').value=S.bridge.url; $('#brUrl').onchange=e=>{ S.bridge.url=e.target.value.trim(); LS.set('bridgeUrl',S.bridge.url); };
