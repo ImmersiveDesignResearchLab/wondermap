@@ -1106,7 +1106,11 @@ function exportCSV(){
 
 // ── KEYBOARD (desktop fallback) ──────────────────────────────────
 document.addEventListener('keydown',e=>{
-  if(e.target===document.getElementById('note-input')) return;
+  // Shortcuts must never fire while typing in a field, or while the setup panel is open
+  const t=e.target, tag=t&&t.tagName;
+  if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'||(t&&t.isContentEditable)) return;
+  if(!document.getElementById('setup-panel').classList.contains('hidden')) return;
+  if(e.metaKey||e.ctrlKey||e.altKey) return;
   if(e.code==='Space'){e.preventDefault();logNotable();}
   if(e.key==='1') logZoneEnter('zA');
   if(e.key==='2') logZoneEnter('zB');
